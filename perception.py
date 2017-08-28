@@ -18,7 +18,7 @@ class Percept:
     goal=None,
     choice=None,
     option=None,
-    valence="neutral"
+    valence=Valence.neutral
   ):
     """
     goal:
@@ -35,6 +35,8 @@ class Percept:
     self.goal = goal
     self.choice = choice
     self.option = option
+    if isinstance(self.option, str):
+      self.option = self.choice.options[self.option] # look up within choice
     self.valence = valence
 
     def get_option(self):
@@ -47,7 +49,7 @@ class Percept:
       else:
         return None
 
-@super_class_property()
+
 class Prospective(Percept):
   """
   A percept generated before making a decision.
@@ -65,46 +67,226 @@ class Prospective(Percept):
     super().__init__(self, *args, **kwargs)
     self.certainty=Certainty(certainty)
 
-@super_class_property()
-class Retrospective(Percept):
-  """
-  A percept generated after observing some outcome(s) of a chosen option.
-  """
-  def __init__(self, *args, **kwargs):
-    super().__init__(self, *args, valence=Valence.bad, **kwargs)
-
-@super_class_property()
 class Enables(Prospective):
   """
   "Enables" is a prospective percept indicating that a specific option has the
   possibility of advancing a goal.
   """
   def __init__(self, *args, **kwargs):
-    super().__init__(self, *args, **kwargs)
+    super().__init__(
+      self,
+      *args,
+      certainty=Certainty.even,
+      valence=Valence.good,
+      **kwargs
+    )
 
-@super_class_property()
 class Threatens(Prospective):
   """
   "Threatens" is the opposite of "enables": It indicates the possibility that a
   goal will be hindered by an option.
   """
   def __init__(self, *args, **kwargs):
-    super().__init__(self, *args, **kwargs)
+    super().__init__(
+      self,
+      *args,
+      certainty=Certainty.even,
+      valence=Valence.bad,
+      **kwargs
+    )
 
-@super_class_property()
 class Advances(Prospective):
   """
   "Advances" indicates that choosing the given option should definitely advance
   the specified goal.
   """
   def __init__(self, *args, **kwargs):
-    super().__init__(self, *args, **kwargs)
+    super().__init__(
+      self,
+      *args,
+      certainty=Certainty.certain,
+      valence=Valence.good,
+      **kwargs
+    )
 
-@super_class_property()
 class Hinders(Prospective):
   """
   "Hinders" indicates that choosing the given option should definitely hinder
   the specified goal.
   """
   def __init__(self, *args, **kwargs):
+    super().__init__(
+      self,
+      *args,
+      certainty=Certainty.certain,
+      valence=Valence.bad,
+      **kwargs
+    )
+
+
+class Retrospective(Percept):
+  """
+  A percept generated after observing some outcome(s) of a chosen option.
+  """
+  def __init__(
+    self,
+    *args,
+    prospective=None
+    expected_valence=Valence.neutral,
+    expected_certainty=Certainty.likely,
+    **kwargs
+  ):
     super().__init__(self, *args, **kwargs)
+    if prospective:
+      self.prospective = prospective
+    else:
+      self.prospective = Prospective(
+        goal=self.goal,
+        choice=self.chioce,
+        option=self.option,
+        valence=expected_valence,
+        certainty=expected_certainty
+      )
+
+class Miserable(Retrospective):
+  """
+  The perception that an outcome was bad, and that that was known ahead of time.
+  """
+  # TODO: How to represent difference between choosing a known bad outcome and
+  # feeling forced vs. feeling rebellious?
+  def __init__(self, *args, **kwargs):
+    super().__init__(
+      self,
+      *args,
+      valence=Valence.bad,
+      expected_valence=Valence.bad,
+      expected_certainty=Certainty.certain,
+      **kwargs
+    )
+
+class Mistake(Retrospective):
+  """
+  The perception that an outcome was bad, but wasn't really foreseeable.
+  """
+  # TODO: how to model the knowledge/fairness involved/required.
+  def __init__(self, *args, **kwargs):
+    super().__init__(
+      self,
+      *args,
+      valence=Valence.bad,
+      expected_valence=Valence.okay,
+      expected_certainty=Certainty.likely,
+      **kwargs
+    )
+
+class UnexpectedFailure(Retrospective):
+  """
+  A decision that seemed good but turned out to be awful.
+  """
+  def __init__(self, *args, **kwargs):
+    super().__init__(
+      self,
+      *args,
+      valence=Valence.bad,
+      expected_valence=Valence.good,
+      expected_certainty=Certainty.certain,
+      **kwargs
+    )
+
+class Unfortunate(Retrospective):
+  """
+  A decision that seemed neutral but turned out bad.
+  """
+  def __init__(self, *args, **kwargs):
+    super().__init__(
+      self,
+      *args,
+      valence=Valence.bad,
+      expected_valence=Valence.neutral,
+      expected_certainty=Certainty.even,
+      **kwargs
+    )
+
+class Fortunate(Retrospective):
+  """
+  A decision that seemed neutral but turned out well.
+  """
+  def __init__(self, *args, **kwargs):
+    super().__init__(
+      self,
+      *args,
+      valence=Valence.good,
+      expected_valence=Valence.neutral,
+      expected_certainty=Certainty.even,
+      **kwargs
+    )
+
+class Relief(Retrospective):
+  """
+  A decision that seemed bad but turned out okay.
+  """
+  def __init__(self, *args, **kwargs):
+    super().__init__(
+      self,
+      *args,
+      valence=Valence.okay,
+      expected_valence=Valence.bad,
+      expected_certainty=Certainty.likely,
+      **kwargs
+    )
+
+class Disappointment(Retrospective):
+  """
+  A decision that seemed okay but turned not great.
+  """
+  def __init__(self, *args, **kwargs):
+    super().__init__(
+      self,
+      *args,
+      valence=Valence.unpleasant,
+      expected_valence=Valence.okay,
+      expected_certainty=Certainty.even,
+      **kwargs
+    )
+
+class GoodDecision(Retrospective):
+  """
+  A decision that seemed good and turned out that way.
+  """
+  def __init__(self, *args, **kwargs):
+    super().__init__(
+      self,
+      *args,
+      valence=Valence.good,
+      expected_valence=Valence.good,
+      expected_certainty=Certainty.even,
+      **kwargs
+    )
+
+class ExpectedSuccess(Retrospective):
+  """
+  A decision that was surely good and turned out that way.
+  """
+  def __init__(self, *args, **kwargs):
+    super().__init__(
+      self,
+      *args,
+      valence=Valence.good,
+      expected_valence=Valence.good,
+      expected_certainty=Certainty.certain,
+      **kwargs
+    )
+
+class UnexpectedSuccess(Retrospective):
+  """
+  An outcome that seemed likely unpleasant but turned out well in the end.
+  """
+  def __init__(self, *args, **kwargs):
+    super().__init__(
+      self,
+      *args,
+      valence=Valence.good,
+      expected_valence=Valence.unpleasant,
+      expected_certainty=Certainty.likely,
+      **kwargs
+    )

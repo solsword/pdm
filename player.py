@@ -7,15 +7,17 @@ PlayerModel code.
 import utils
 
 import engagement
+import perception
+import decision
 
 class PlayerModel:
   """
-  Models a player as having a collection of modes of engagement, each of which
-  includes multiple goals at different priorities. The player may have a strict
-  ranking of these different modes, or may have per-mode priority modifiers, or
-  may even have per-goal priority modifiers or overrides. At any point a
-  player-specific combined mode of engagement can be constructed which assigns
-  global priorities to all player goals.
+  Models a player as having a DecisionMethod and a collection of modes of
+  engagement, each of which includes multiple goals at different priorities.
+  The player may have a strict ranking of these different modes, or may have
+  per-mode priority modifiers, or may even have per-goal priority modifiers or
+  overrides. At any point a player-specific combined mode of engagement can be
+  constructed which assigns global priorities to all player goals.
   
   Note that priorities for specific goals are endemic to a player model and
   cannot be compared between player models because of arbitrary numbering
@@ -35,6 +37,7 @@ class PlayerModel:
   def __init__(
     self,
     name,
+    decision_method,
     modes_of_engagement,
     mode_ranking=None,
     mode_adjustments=None,
@@ -47,6 +50,10 @@ class PlayerModel:
 
     name:
       The name for this player model.
+
+    decision_method:
+      A DecisionMethod object (see decision.py) representing how this player
+      makes decisions. Can be updated with set_decision_mode.
 
     modes_of_engagement:
       A list of ModeOfEngagement objects (see engagement.py) that this player
@@ -80,6 +87,7 @@ class PlayerModel:
       must still be included in a constituent mode of engagement, though.
     """
     self.name = name
+    self.decision_method = decision_method
     self.modes = modes_of_engagement
 
     all_mode_names = set(self.modes.keys())
@@ -124,6 +132,12 @@ class PlayerModel:
     )
 
     self._synthesize_mode()
+
+  def set_decision_mode(self, dm):
+    """
+    Updates this player's decision mode.
+    """
+    self.decision_method = dm
 
   def combined_mode(self):
     """
@@ -182,3 +196,22 @@ class PlayerModel:
 
       # adjust base priority and continue to the next rank
       current_base_prioity = max_priority_so_far + 1
+
+  def impute_prospective_impressions(self, choice):
+    self._synthesize_mode()
+
+  def impute_retrospective_impressions(self, choice):
+
+
+  def make_decision(self, choice):
+    """
+    Given a choice, creates a Decision object by building a decision model
+    using an updated-if-necessary full mode of engagement and then deciding on
+    an option using a DecisionMethod.
+    """
+
+  def synthesize_prospective_impressions(self):
+    """
+    Synthesizes prospective impressions for this decision, storing them in the
+    'prospective' attribute.
+    """

@@ -4,7 +4,11 @@ choice.py
 Code for dealing with choice structures.
 """
 
+import random
+
 from base_types import Certainty
+from base_types import Valence
+from base_types import Visibility
 
 class Outcome:
   """
@@ -30,17 +34,16 @@ class Outcome:
 
     goal_effects:
       How this outcome affects various goals. Should be a mapping from goal
-      names to Valences (see base_types.py).
+      names to Valences (or just raw numbers; see base_types.py).
 
     visibility:
-      Whether this outcome is "full"y visible, "partial"ly visible, or
-      "invisible" to the player. May also be specified as a number between 0.0
-      and 1.0.
+      The Visibility level of this outcome (or just a raw number; see
+      base_types.py).
 
     apparent_likelihood:
       Pre-decision likelihood of this outcome as apparent to the player. Should
-      be a "Certainty" object or it may be given as a probability between 0.0
-      and 1.0.
+      be a Certainty object or it may be given as a probability value (see
+      base_types.py)
 
     actual_likelihood:
       Actual likelihood of this outcome based on internal game logic. Uses the
@@ -48,8 +51,8 @@ class Outcome:
       of apparent_likelihood.
     """
     self.name = name
-    self.goal_effects = Valence(goal_effects)
-    self.visibility = visibility
+    self.goal_effects = {k: Valence(v) for k, v in goal_effects.items()}
+    self.visibility = Visibility(visibility)
     self.apparent_likelihood = Certainty(apparent_likelihood)
     if actual_likelihood is None:
       self.actual_likelihood = Certainty(self.apparent_likelihood)
@@ -111,6 +114,24 @@ class Option:
       )
 
     del self.outcomes[outcome_name]
+
+  def sample_outcomes(self):
+    """
+    Returns a sample of outcomes for this option according to their actual
+    likelihoods. The sample is returned as a dictionary mapping outcome names
+    to Outcome objects. The dictionary is fresh but the Outcome objects aren't
+    copies, so they shouldn't be modified. Note that it's almost always
+    possible for the outcomes list to be empty.
+    """
+    results = {}
+
+    for o in self.outcomes:
+      out = self.outcomes[o]
+      r = random.uniform(0.0, 1.0)
+      if r < out.probability:
+        results[o] = out
+
+    return results
 
 
 class Choice:

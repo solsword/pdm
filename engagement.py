@@ -18,6 +18,8 @@ DEFAULT_PRIORITY:
 
 import utils
 
+import perception
+
 DEFAULT_PRIORITY = 5
 
 class PriorityMode:
@@ -152,8 +154,51 @@ class ModeOfEngagement:
         )
       )
 
+  def build_prospective_option_model(self, choice, option):
+    """
+    Builds a mapping from goal names to lists of prospective Percepts for the
+    given Option (at the given choice) based on its outcomes and the goals
+    represented in this mode of engagement.
+    """
+    result = {}
+    for o in option.outcomes:
+      out = option.outcomes[o]
+      if out.visibility * out.apparent_likelihood > 0: # otherwise ignore
+        for g in out.goal_effects:
+          if g in self.goals:
+
+            # add a result entry if necessary
+            if g not in result:
+              result[g] = []
+
+            # add the appropriate percept
+            result[g].append(
+              perception.Prospective(
+                goal=g,
+                choice=choice,
+                option=option,
+                valence=out.goal_effects[g],
+                certainty=out.apparent_likelihood * out.visibility,
+              )
+            )
+          # otherwise ignore this effect as this mode of engagement doesn't
+          # care about that goal.
+      # otherwise ignore this outcome as its either zero-likelihood or
+      # zero-visibility. Note the difference between Inconceivable and
+      # Impossible, and don't use Impossible unless really warranted!
+
+    return result
+
   def build_decision_model(self, choice):
     """
     Builds a decision model for the given choice based on the goals and
-    priorities specified in this mode of engagement.
+    priorities specified in this mode of engagement. A decision model maps from
+    option names to maps from goal names to prospective impression lists, and
+    is based on the visibility, certainty, and apparent likelihood of outcomes
+    plus the valences of their goal effects.
     """
+    result = {}
+    for o in choice.options:
+      result[o] = self.build_prospective_option_model(choice, choice.options[o])
+
+    return result
