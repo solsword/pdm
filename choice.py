@@ -4,6 +4,8 @@ choice.py
 Code for dealing with choice structures.
 """
 
+from base_types import Certainty
+
 class Outcome:
   """
   An outcome models a consequence of an option including visibility to the
@@ -28,8 +30,7 @@ class Outcome:
 
     goal_effects:
       How this outcome affects various goals. Should be a mapping from goal
-      names to effects, which should each be one of "awful", "bad", "neutral",
-      "good", or "wonderful".
+      names to Valences (see base_types.py).
 
     visibility:
       Whether this outcome is "full"y visible, "partial"ly visible, or
@@ -38,8 +39,8 @@ class Outcome:
 
     apparent_likelihood:
       Pre-decision likelihood of this outcome as apparent to the player. Should
-      be one of "impossible", "unlikely", "even", "likely", or "certain", or
-      may be given as a probability between 0.0 and 1.0.
+      be a "Certainty" object or it may be given as a probability between 0.0
+      and 1.0.
 
     actual_likelihood:
       Actual likelihood of this outcome based on internal game logic. Uses the
@@ -47,13 +48,13 @@ class Outcome:
       of apparent_likelihood.
     """
     self.name = name
-    self.goal_effects = goal_effects
+    self.goal_effects = Valence(goal_effects)
     self.visibility = visibility
-    self.apparent_likelihood = apparent_likelihood
+    self.apparent_likelihood = Certainty(apparent_likelihood)
     if actual_likelihood is None:
-      self.actual_likelihood = self.apparent_likelihood
+      self.actual_likelihood = Certainty(self.apparent_likelihood)
     else:
-      self.actual_likelihood = actual_likelihood
+      self.actual_likelihood = Certainty(actual_likelihood)
 
 class Option:
   """

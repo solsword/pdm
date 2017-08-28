@@ -4,6 +4,8 @@ utils.py
 Various utility functions.
 """
 
+import inspect
+
 class NoDefault:
   """
   A class to indicate a missing default when None is an acceptable value.
@@ -61,3 +63,39 @@ def check_names(collection, message="Two objects share name '{}'."):
   if nc:
     raise ValueError(message.format(nc))
   return True
+
+def super_class_property(*args, **kwargs):
+  """
+  A class decorator that adds the class' name in lowercase as a property of
+  it's superclass with a value constructed using the subclass' constructor with
+  the given arguments. So for example:
+
+    class A:
+      pass
+
+    @super_class_property(foo=5)
+    class B(A):
+      def __init__(self, foo=3):
+        self.foo=foo
+
+  Effectively results in the following, after the definition of B:
+
+    A.b = B(foo=5)
+
+  Can be used multiple times with different arguments if desired.
+  """
+  def add_superclass_property(cls):
+    nonlocal args, kwargs
+    mro = inspect.getmro(cls)
+    if len(mro <= 2):
+      raise TypeError(
+        (
+          "Class {} can't be a super_class_property because it has no super "
+          "class."
+        ).format(cls)
+      )
+    parent = mro[1]
+    setattr(parent, cls.__name__.lower(), cls(*args, **kwargs))
+    return cls
+
+  return add_superclass_property

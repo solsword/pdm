@@ -24,21 +24,25 @@ class PriorityMode:
   """
   Types for specifying how priorities should be handled.
   """
-  class Soft:
-    """
-    In Soft mode, priorities represent relative importance, with each integer
-    difference in priority representing being 'falloff' less important.
-    """
-    def __init__(self, falloff=2/3):
-      self.falloff = falloff
-    pass
-  class Hard:
-    """
-    In Hard mode, priorities represent absolute precedence, so decisions are
-    made at the highest available priority level (lowest priority value) and
-    lower levels are only considered in order to break ties.
-    """
-    pass
+  pass
+
+@super_class_property()
+class Soft(PriorityMode):
+  """
+  In Soft mode, priorities represent relative importance, with each integer
+  difference in priority representing being 'falloff' less important.
+  """
+  def __init__(self, falloff=2/3):
+    self.falloff = falloff
+
+@super_class_property()
+class Hard(PriorityMode):
+  """
+  In Hard mode, priorities represent absolute precedence, so decisions are
+  made at the highest available priority level (lowest priority value) and
+  lower levels are only considered in order to break ties.
+  """
+  pass
 
 class ModeOfEngagement:
   def __init__(self, name, goals=None, priorities=None):
