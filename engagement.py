@@ -22,14 +22,21 @@ import perception
 
 DEFAULT_PRIORITY = 5
 
-class PriorityMode:
+class PriorityMethod:
   """
   Types for specifying how priorities should be handled.
   """
-  pass
+  def factor_decision_model(self, dm, priorities):
+    """
+    Takes a map from option names to maps from goal names to Prospective
+    impression objects and factors it into several such maps based on different
+    goal priority levels, while also assigning a salience modifier to each goal
+    name included in the map. Returns a pair of (models_list, goal_saliences).
+    """
+    raise NotImplementedError("You must use a subclass of PriorityMethod.")
 
 @super_class_property()
-class Soft(PriorityMode):
+class Soft(PriorityMethod):
   """
   In Soft mode, priorities represent relative importance, with each integer
   difference in priority representing being 'falloff' less important.
@@ -37,14 +44,54 @@ class Soft(PriorityMode):
   def __init__(self, falloff=2/3):
     self.falloff = falloff
 
+  def factor_decision_model(self, dm, priorities):
+    """
+    See PriorityMethod.factor_decision_model.
+
+    Puts all goals together into the same decision model, but assigns
+    relevances according to the given goal priorities and this object's falloff
+    value.
+    """
+    models = [ dm ]
+    all_goals = set()
+    for opt in dm:
+      all_goals |= dm[opt].keys()
+    relevances = { gn: self.falloff**(priorities[gn]-1) for gn in all_goals }
+    return models, relevances
+
 @super_class_property()
-class Hard(PriorityMode):
+class Hard(PriorityMethod):
   """
   In Hard mode, priorities represent absolute precedence, so decisions are
   made at the highest available priority level (lowest priority value) and
   lower levels are only considered in order to break ties.
   """
-  pass
+  def factor_decision_model(self, dm, priorities):
+    """
+    See PriorityMethod.factor_decision_model.
+
+    Creates one decision model for each priority bracket among relevant goals,
+    where each model also includes the previous model. All goals are assigned
+    equal relevance.
+    """
+    all_goals = set()
+    for opt in dm:
+      all_goals |= dm[opt].keys()
+    relevances = { gn: 1 for gn in all_goals }
+
+    models = []
+    priority_levels = sorted(list(set(priorities.values())))
+    for pl in priority_levels:
+      ldm = {}
+      for opt in dm:
+        ldm[opt] = {}
+        for goal in dm[opt]:
+          if priorities[goal] <= pl:
+            ldm[opt][goal] = dm[opt][goal]
+
+      models.append(ldm)
+
+    return models, relevances
 
 class ModeOfEngagement:
   def __init__(self, name, goals=None, priorities=None):
@@ -58,9 +105,10 @@ class ModeOfEngagement:
 
     priorities:
       A dictionary mapping goal names to priority integers (smaller integers
-      representing higher priorities). Any unmapped goals are given the
-      DEFAULT_PRIORITY, and any spurious priorities which don't match the name
-      of a given goal are removed with a warning.
+      representing higher priorities, with 1 being the highest priority). Any
+      unmapped goals are given the DEFAULT_PRIORITY, and any spurious
+      priorities which don't match the name of a given goal are removed with a
+      warning.
     """
     self.name = name
     self.goals = { g.name: g for g in goals } if goals else {}
@@ -178,24 +226,25 @@ class ModeOfEngagement:
                 choice=choice,
                 option=option,
                 valence=out.goal_effects[g],
-                certainty=out.apparent_likelihood * out.visibility,
+                certainty=out.apparent_likelihood,
+                salience=out.salience,
               )
             )
           # otherwise ignore this effect as this mode of engagement doesn't
           # care about that goal.
       # otherwise ignore this outcome as its either zero-likelihood or
-      # zero-visibility. Note the difference between Inconceivable and
+      # zero-salience. Note the difference between Inconceivable and
       # Impossible, and don't use Impossible unless really warranted!
 
     return result
 
   def build_decision_model(self, choice):
     """
-    Builds a decision model for the given choice based on the goals and
-    priorities specified in this mode of engagement. A decision model maps from
-    option names to maps from goal names to prospective impression lists, and
-    is based on the visibility, certainty, and apparent likelihood of outcomes
-    plus the valences of their goal effects.
+    Builds a decision model for the given choice based on the goals specified
+    in this mode of engagement. A decision model maps from option names to maps
+    from goal names to prospective impression lists, and is based on the
+    visibility, certainty, and apparent likelihood of outcomes plus the
+    valences of their goal effects.
     """
     result = {}
     for o in choice.options:

@@ -12,12 +12,13 @@ import decision
 
 class PlayerModel:
   """
-  Models a player as having a DecisionMethod and a collection of modes of
-  engagement, each of which includes multiple goals at different priorities.
-  The player may have a strict ranking of these different modes, or may have
-  per-mode priority modifiers, or may even have per-goal priority modifiers or
-  overrides. At any point a player-specific combined mode of engagement can be
-  constructed which assigns global priorities to all player goals.
+  Models a player as having a DecisionMethod, a PriorityMethod, and a
+  collection of modes of engagement, each of which includes multiple goals at
+  different priorities. The player may have a strict ranking of these different
+  modes, or may have per-mode priority modifiers, or may even have per-goal
+  priority modifiers or overrides. At any point a player-specific combined mode
+  of engagement can be constructed which assigns global priorities to all
+  player goals.
   
   Note that priorities for specific goals are endemic to a player model and
   cannot be compared between player models because of arbitrary numbering
@@ -39,6 +40,7 @@ class PlayerModel:
     name,
     decision_method,
     modes_of_engagement,
+    priority_method=engagement.PriorityMethod.soft,
     mode_ranking=None,
     mode_adjustments=None,
     goal_adjustments=None
@@ -53,11 +55,15 @@ class PlayerModel:
 
     decision_method:
       A DecisionMethod object (see decision.py) representing how this player
-      makes decisions. Can be updated with set_decision_mode.
+      makes decisions. Can be updated with set_decision_method.
 
     modes_of_engagement:
-      A list of ModeOfEngagement objects (see engagement.py) that this player
-      will use.
+      A dictionary mapping names to ModeOfEngagement objects (see
+      engagement.py) that this player will use.
+
+    priority_method:
+      A PriorityMethod object (see engagement.py) representing how this player
+      prioritizes goals. Can be updated using set_priority_method.
 
     mode_ranking:
       A strict ranking allowing some modes absolute precedence over others.
@@ -87,8 +93,26 @@ class PlayerModel:
       must still be included in a constituent mode of engagement, though.
     """
     self.name = name
+
     self.decision_method = decision_method
-    self.modes = modes_of_engagement
+    if not isinstance(self.decision_method, decision.DecisionMethod):
+      raise TypeError("decision_method must be a DecisionMethod.")
+
+    if not isinstance(modes_of_engagement, dict):
+      raise TypeError(
+        "modes_of_engagement must be dictionary of ModeOfEngagement objects."
+      )
+    self.modes = dict(modes_of_engagement)
+    if not all(
+      isinstance(m, engagement.ModeOfEngagement) for m in self.modes.values()
+    ):
+      raise TypeError(
+        "modes_of_engagement must be dictionary of ModeOfEngagement objects."
+      )
+
+    self.priority_method = priority_method
+    if not isinstance(self.priority_method, engagement.PriorityMethod):
+      raise TypeError("priority_method must be a PriorityMethod.")
 
     all_mode_names = set(self.modes.keys())
 
@@ -131,15 +155,21 @@ class PlayerModel:
       "Override for goal '{}' discarded (no matching goal in any mode)."
     )
 
-    self._synthesize_mode()
+    self._synthesize_moe()
 
-  def set_decision_mode(self, dm):
+  def set_decision_method(self, dm):
     """
-    Updates this player's decision mode.
+    Updates this player's decision method.
     """
     self.decision_method = dm
 
-  def combined_mode(self):
+  def set_priority_method(self, pm):
+    """
+    Updates this player's priority method.
+    """
+    self.priority_method = pm
+
+  def combined_mode_of_engagement(self):
     """
     Returns a ModeOfEngagement representing a synthesis of all of the player's
     current modes of engagement with appropriate rankings, adjustments, and
@@ -149,15 +179,15 @@ class PlayerModel:
 
     The returned mode is used internally and thus shouldn't be modified.
     """
-    self._synthesize_mode()
-    return self._synthesized_mode
+    self._synthesize_moe()
+    return self._synthesized_mode_of_engagement
 
-  def _synthesize_mode(self):
+  def _synthesize_moe(self):
     """
     Internal method for updating the current combined mode of engagement.
     """
     # create a new empty mode of engagement:
-    self._synthesized_mode = engagement.ModeOfEngagement(
+    self._synthesized_mode_of_engagement = engagement.ModeOfEngagement(
       "{}-synthesized".format(self.name),
     )
 
@@ -184,12 +214,12 @@ class PlayerModel:
           + self.goal_adjustments[gn]
           )
 
-          if gn in self._synthesized_mode.goals():
-            if adjp < self._synthesized_mode.get_priority(gn):
-              self._synthesized_mode.set_priority(gn, adjp)
+          if gn in self._synthesized_mode_of_engagement.goals():
+            if adjp < self._synthesized_mode_of_engagement.get_priority(gn):
+              self._synthesized_mode_of_engagement.set_priority(gn, adjp)
             # else do nothing
           else:
-            self._synthesized_mode.add_goal(mg[gn], adjp)
+            self._synthesized_mode_of_engagement.add_goal(mg[gn], adjp)
 
           if max_priority_so_far == None or max_priority_so_far < adjp:
             max_priority_so_far = adjp
@@ -198,20 +228,26 @@ class PlayerModel:
       current_base_prioity = max_priority_so_far + 1
 
   def impute_prospective_impressions(self, choice):
-    self._synthesize_mode()
+    self._synthesize_moe()
 
   def impute_retrospective_impressions(self, choice):
 
 
-  def make_decision(self, choice):
+  def make_decision(self, choice, outcomes=None):
     """
     Given a choice, creates a Decision object by building a decision model
     using an updated-if-necessary full mode of engagement and then deciding on
     an option using a DecisionMethod.
     """
+    self._synthesize_moe()
+    decision = decision.Decision(choice)
+    decision.add_prospective_impressions(
+      self.priority_method,
+      self._synthesized_mode_of_engagement
+    )
+    selection = self.decision_method.decide(decision)
+    decision.select_option(selection)
+    decision.roll_outcomes()
+    decision.add_retrospective_impressions()
 
-  def synthesize_prospective_impressions(self):
-    """
-    Synthesizes prospective impressions for this decision, storing them in the
-    'prospective' attribute.
-    """
+    return decision

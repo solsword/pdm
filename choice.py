@@ -8,23 +8,23 @@ import random
 
 from base_types import Certainty
 from base_types import Valence
-from base_types import Visibility
+from base_types import Salience
 
 class Outcome:
   """
-  An outcome models a consequence of an option including visibility to the
+  An outcome models a consequence of an option including salience to the
   player before making the decision, probability of occurrence once a decision
   is made, and effects on various goals. Outcomes are included in Option
   objects to model choice structures.
 
-  Note: differential outcome visibility can also be modeled through
-  manipulating player goals.
+  Note: differential outcome salience can also be modeled through manipulating
+  player goals.
   """
   def __init__(
     self,
     name,
     goal_effects,
-    visibility,
+    salience,
     apparent_likelihood,
     actual_likelihood=None,
   ):
@@ -36,9 +36,11 @@ class Outcome:
       How this outcome affects various goals. Should be a mapping from goal
       names to Valences (or just raw numbers; see base_types.py).
 
-    visibility:
-      The Visibility level of this outcome (or just a raw number; see
-      base_types.py).
+    salience:
+      The Salience level of this outcome for prospective considerations (or
+      just a raw number; see base_types.py).
+      TODO: Split into prospective/retrospective salience? Retroactive salience
+      distrbutions over time?
 
     apparent_likelihood:
       Pre-decision likelihood of this outcome as apparent to the player. Should
@@ -52,7 +54,7 @@ class Outcome:
     """
     self.name = name
     self.goal_effects = {k: Valence(v) for k, v in goal_effects.items()}
-    self.visibility = Visibility(visibility)
+    self.salience = Salience(salience)
     self.apparent_likelihood = Certainty(apparent_likelihood)
     if actual_likelihood is None:
       self.actual_likelihood = Certainty(self.apparent_likelihood)
@@ -187,3 +189,53 @@ class Choice:
         )
       )
     del self.options[option_name]
+
+
+def parse_choice(json):
+  """
+  Parses a full choice definition from a json format. An example:
+
+  {
+    name: "Rescue the baby dragon or not?",
+    options: {
+      rescue_it: {
+        bites_your_hand: {
+          salience: "implicit",
+          apparent_likelihood: "even",
+          effects: {
+            health_and_safety: "unsatisfactory",
+            befriend_dragon: "unsatisfactory",
+          }
+        },
+        appreciates_kindness: {
+          salience: "explicit",
+          apparent_likelihood: "likely",
+          effects: {
+            befriend_dragon: "good"
+          }
+        }
+      },
+
+      leave_it: {
+        dislikes_abandonment: {
+          salience: "explicit",
+          apparent_likelihood: "certain",
+          effects: {
+            befriend_dragon: "bad"
+          }
+        },
+        dies: {
+          salience: "hinted",
+          apparent_likelihood: "unlikely",
+          actual_likelihood: "even",
+          effects: {
+            befriend_dragon: "awful"
+            kill_dragon: "great"
+          }
+        }
+      }
+    }
+  }
+
+  """
+  # TODO: Implement this!

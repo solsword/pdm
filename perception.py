@@ -18,7 +18,8 @@ class Percept:
     goal=None,
     choice=None,
     option=None,
-    valence=Valence.neutral
+    valence=Valence.neutral,
+    salience=Salience.explicit,
   ):
     """
     goal:
@@ -31,6 +32,8 @@ class Percept:
     valence:
       The positive or negative alignment of this percept. Should be "positive",
       "negative", or "neutral", or else a number between -1 and 1.
+    salience:
+      The apparent importance/relevance of this percept.
     """
     self.goal = goal
     self.choice = choice
@@ -38,16 +41,24 @@ class Percept:
     if isinstance(self.option, str):
       self.option = self.choice.options[self.option] # look up within choice
     self.valence = valence
+    self.salience = salience
 
-    def get_option(self):
-      """
-      Returns the option object associated with this percept, or None if there
-      isn't any.
-      """
-      if self.option:
-        return self.choice.options[self.option]
-      else:
-        return None
+  def get_option(self):
+    """
+    Returns the option object associated with this percept, or None if there
+    isn't any.
+    """
+    if self.option:
+      return self.choice.options[self.option]
+    else:
+      return None
+
+  def utility(self):
+    """
+    Computes the perceived "utility" of this percept. Note: try not to rely on
+    this method, as it doesn't model human decision making very well at all.
+    """
+    return self.valence * self.salience
 
 
 class Prospective(Percept):
@@ -66,6 +77,12 @@ class Prospective(Percept):
     """
     super().__init__(self, *args, **kwargs)
     self.certainty=Certainty(certainty)
+
+  def utility(self):
+    """
+    Override to include certainty in the calculation.
+    """
+    return self.valence * self.salience * self.certainty
 
 class Enables(Prospective):
   """
@@ -128,14 +145,66 @@ class Retrospective(Percept):
   """
   A percept generated after observing some outcome(s) of a chosen option.
   """
+  def merge_retrospective_impressions(ilist):
+    """
+    Takes a list of retrospective impressions for the same goal and merges them
+    into a single abstract impression of that goal, which includes an abstract
+    prospective impression as well.
+    """
+    pr_certainties = [impr.prospective.certainty for impr in ilist]
+    pr_salineces = [impr.prospective.salience for impr in ilist]
+    pr_utilities = [impr.prospective.utility() for impr in ilist]
+
+    # half-way between minimum and average
+    combined_certianty = (
+      min(pr_certainties)
+    + sum(pr_certainties) / len(ilist)
+    ) / 2
+
+    combined_salience = max(pr_salineces)
+
+    # TODO: Different methods for combining valences?
+    combined_valence = sum(pr_utilities) / len(ilist)
+
+    abstract_prospective = Prospective(
+      certainty=combined_certianty,
+      salience=combined_salience,
+      valence=combined_valence
+    )
+
+    rt_saliences = [impr.salience for impr in ilist]
+
+    # TODO: better than utility here?
+    rt_utilities = [impr.utility() for impr in ilist]
+
+    combined_salience = max(rt_saliences)
+    combined_valence = sum(rt_utilities) / len(ilist)
+
+    return Retrospective(
+      salience = combined_salience,
+      valence = combined_valence,
+      prospective = abstract_prospective
+    )
+
   def __init__(
     self,
     *args,
     prospective=None
     expected_valence=Valence.neutral,
     expected_certainty=Certainty.likely,
+    expected_salience=Salience.explicit,
     **kwargs
   ):
+    """
+    prospective:
+      A Prospective percept object that anchors this retrospective impression.
+      May be left out if expected_valence, expected_certainty, and
+      expected_salience are given instead.
+    expected_valence/certainty/salience:
+      If no prospective percept is given, these can be given instead and will
+      be used to define one. These are ignored if a prospective impression is
+      given.
+    """
     super().__init__(self, *args, **kwargs)
     if prospective:
       self.prospective = prospective
@@ -145,7 +214,8 @@ class Retrospective(Percept):
         choice=self.chioce,
         option=self.option,
         valence=expected_valence,
-        certainty=expected_certainty
+        certainty=expected_certainty,
+        salience=expected_salience,
       )
 
 class Miserable(Retrospective):

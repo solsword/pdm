@@ -4,30 +4,30 @@ base_types.py
 Common base types for player decision modelling.
 """
 
-class Certianty:
+import utils
+
+class NumberType(float):
+  """
+  A numeric type w/ baggage.
+  """
+  def __new__(cls, val):
+    return float.__new__(cls, val)
+
+  def __init__(self, val):
+    float.__init__(self, val)
+
+  def __str__(self):
+    return repr(self)
+
+  def __repr__(self):
+    return "{}({})".format(type(self).__name__, self.real)
+
+
+class Certianty(NumberType):
   """
   Represents different certainty levels. The argument should be either a number
   between 0 and 1 or a Certainty (which will be copied).
   """
-  def __init__(self, prob_or_other):
-    if isinstance(prob_or_other, Certainty):
-      self.probability = prob_or_other.probability
-    elif isinstance(prob_or_other, float) or isinstance(prob_or_other, int):
-      if 0 <= prob_or_other <= 1:
-        self.probability = float(prob_or_other)
-      else:
-        raise ValueError("Invalid probability value {}.".format(prob_or_other))
-    else:
-      raise TypeError(
-        (
-          "Can't construct a certainty using '{}' of type {}. A number between "
-          "0 and 1 is required."
-        ).format(
-          prob_or_other,
-          type(prob_or_other)
-        )
-      )
-
   def abstract(certainty):
     """
     Takes an arbitrary Certainty object (or just a probability between 0 and 1)
@@ -55,7 +55,15 @@ class Certianty:
         .format(p)
       )
 
-@super_class_property()
+  def __init__(self, prob):
+    super().__init__(self, prob)
+    if not (0 <= self.real <= 1):
+      raise ValueError(
+        "Invalid certainty value {} (not in [0,1]).".format(prob)
+      )
+
+
+@utils.super_class_property()
 class Impossible(Certainty):
   """
   Represents an event that can actually never occur.
@@ -63,7 +71,7 @@ class Impossible(Certainty):
   def __init__(self):
     super().__init__(self, 0.0)
 
-@super_class_property()
+@utils.super_class_property()
 class Inconceivable(Certainty):
   """
   Represents an event that's extremely unlikely.
@@ -71,7 +79,7 @@ class Inconceivable(Certainty):
   def __init__(self):
     super().__init__(self, 0.001)
 
-@super_class_property()
+@utils.super_class_property()
 class Unlikely(Certainty):
   """
   Represents an event that's fairly unlikely.
@@ -79,7 +87,7 @@ class Unlikely(Certainty):
   def __init__(self):
     super().__init__(self, 0.2)
 
-@super_class_property()
+@utils.super_class_property()
 class Even(Certainty):
   """
   Represents an event that's 50% likely.
@@ -87,7 +95,7 @@ class Even(Certainty):
   def __init__(self):
     super().__init__(self, 0.5)
 
-@super_class_property()
+@utils.super_class_property()
 class Likely(Certainty):
   """
   Represents an event that's fairly likely.
@@ -95,7 +103,7 @@ class Likely(Certainty):
   def __init__(self):
     super().__init__(self, 0.8)
 
-@super_class_property()
+@utils.super_class_property()
 class Certain(Certainty):
   """
   Represents an event that's almost completely certain.
@@ -103,7 +111,7 @@ class Certain(Certainty):
   def __init__(self):
     super().__init__(self, 0.999)
 
-@super_class_property()
+@utils.super_class_property()
 class Inviolable(Certainty):
   """
   Represents an event that's actually certain.
@@ -112,29 +120,10 @@ class Inviolable(Certainty):
     super().__init__(self, 1.0)
 
 
-class Valence:
+class Valence(NumberType):
   """
   Represents goodness or badness, on an abstract scale from -1 to 1.
   """
-  def __init__(self, val_or_other=0):
-    if isinstance(val_or_other, Valence):
-      self.value = val_or_other.value
-    elif isinstance(val_or_other, float) or isinstance(val_or_other, int):
-      if -1 <= val_or_other <= 1:
-        self.value = float(val_or_other)
-      else:
-        raise ValueError("Invalid valence value {}.".format(val_or_other))
-    else:
-      raise TypeError(
-        (
-          "Can't construct a valence using '{}' of type {}. A number between "
-          "-1 and 1 is required."
-        ).format(
-          val_or_other,
-          type(val_or_other)
-        )
-      )
-
   def abstract(valence):
     """
     Takes an arbitrary Valence object (or just a valence between -1 and 1) and
@@ -151,7 +140,7 @@ class Valence:
     elif -0.8 <= v < -0.35:
       return Valence.bad
     elif -0.35 <= v < -0.05:
-      return Valence.unpleasant
+      return Valence.unsatisfactory
     elif -0.05 <= v <= 0.05:
       return Valence.neutral
     elif 0.05 < v <= 0.35:
@@ -159,14 +148,22 @@ class Valence:
     elif 0.35 < v <= 0.8:
       return Valence.good
     elif 0.8 < v <= 1.0:
-      return Valence.wonderful
+      return Valence.great
     else:
       raise ValueError(
         "Can't find an abstract valence from invalid value {:.3f}."
         .format(v)
       )
 
-@super_class_property()
+  def __init__(self, val=0):
+    super().__init__(self, val)
+    if not (-1 <= val <= 1):
+      raise ValueError(
+        "Invalid valence value {} (not in [-1, 1]).".format(val)
+      )
+
+
+@utils.super_class_property()
 class Awful(Valence):
   """
   A really bad value.
@@ -174,7 +171,7 @@ class Awful(Valence):
   def __init__(self, *args, **kwargs):
     super().__init__(self, *args, value=-0.95, **kwargs)
 
-@super_class_property()
+@utils.super_class_property()
 class Bad(Valence):
   """
   A pretty bad value.
@@ -182,15 +179,15 @@ class Bad(Valence):
   def __init__(self, *args, **kwargs):
     super().__init__(self, *args, value=-0.6, **kwargs)
 
-@super_class_property()
-class Unpleasant(Valence):
+@utils.super_class_property()
+class Unsatisfactory(Valence):
   """
   A slightly bad value.
   """
   def __init__(self, *args, **kwargs):
     super().__init__(self, *args, value=-0.2, **kwargs)
 
-@super_class_property()
+@utils.super_class_property()
 class Neutral(Valence):
   """
   The perfectly neutral value.
@@ -198,7 +195,7 @@ class Neutral(Valence):
   def __init__(self, *args, **kwargs):
     super().__init__(self, *args, value=0, **kwargs)
 
-@super_class_property()
+@utils.super_class_property()
 class Okay(Valence):
   """
   A slightly positive value.
@@ -206,7 +203,7 @@ class Okay(Valence):
   def __init__(self, *args, **kwargs):
     super().__init__(self, *args, value=0.2, **kwargs)
 
-@super_class_property()
+@utils.super_class_property()
 class Good(Valence):
   """
   A reasonably positive value.
@@ -214,8 +211,8 @@ class Good(Valence):
   def __init__(self, *args, **kwargs):
     super().__init__(self, *args, value=0.6, **kwargs)
 
-@super_class_property()
-class Wonderful(Valence):
+@utils.super_class_property()
+class Great(Valence):
   """
   A really positive value.
   """
@@ -223,28 +220,40 @@ class Wonderful(Valence):
     super().__init__(self, *args, value=0.95, **kwargs)
 
 
-class Visibility:
+class Salience(NumberType):
   """
-  Visibility indicates how apparent/relevant an outcome seems before a choice
-  is made.
+  Salience indicates how apparent/relevant an outcome seems before a choice is
+  made.
   """
-  def __init__(self, val_or_other=1.0):
-    if isinstance(val_or_other, Visibility):
-      self.value = val_or_other.value
-    elif isinstance(val_or_other, float) or isinstance(val_or_other, int):
-      if 0 <= val_or_other <= 1:
-        self.value = float(val_or_other)
-      else:
-        raise ValueError("Invalid visibility value {}.".format(val_or_other))
+  def abstract(visibility):
+    """
+    Takes an arbitrary Salience object (or just a number between 0 and 1) and
+    returns an approximation in terms of the fixed visibility objects defined
+    below.
+    """
+    v = visibility
+    if isinstance(v, Salience):
+      v = v.value
+
+    if 0 <= v < 0.05:
+      return Salience.invisible
+    elif 0.05 <= v < 0.5:
+      return Salience.hinted
+    elif 0.5 <= v < 0.9:
+      return Salience.implicit
+    elif 0.9 <= v <= 1.0:
+      return Salience.explicit
     else:
-      raise TypeError(
-        (
-          "Can't construct a visibility using '{}' of type {}. A number "
-          "between 0 and 1 is required."
-        ).format(
-          val_or_other,
-          type(val_or_other)
-        )
+      raise ValueError(
+        "Can't find an abstract visibility from invalid value {:.3f}."
+        .format(v)
+      )
+
+  def __init__(self, val=0):
+    super().__init__(self, val)
+    if not (0 <= val <= 1):
+      raise ValueError(
+        "Invalid salience value {} (not in [0, 1]).".format(val)
       )
 
   def is_visible(self):
@@ -253,56 +262,33 @@ class Visibility:
     """
     return self.value > 0
 
-  def abstract(visibility):
-    """
-    Takes an arbitrary Visibility object (or just a number between 0 and 1) and
-    returns an approximation in terms of the fixed visibility objects defined
-    below.
-    """
-    v = visibility
-    if isinstance(v, Visibility):
-      v = v.value
 
-    if 0 <= v < 0.05:
-      return Visibility.invisible
-    elif 0.05 <= v < 0.5:
-      return Visibility.hinted
-    elif 0.5 <= v < 0.9:
-      return Visibility.implicit
-    elif 0.9 <= v <= 1.0:
-      return Visibility.explicit
-    else:
-      raise ValueError(
-        "Can't find an abstract visibility from invalid value {:.3f}."
-        .format(v)
-      )
-
-@super_class_property()
-class Invisible(Visibility):
+@utils.super_class_property()
+class Invisible(Salience):
   """
   An outcome which is completely non-apparent.
   """
   def __init__(self):
     super().__init__(self, 0.0)
 
-@super_class_property()
-class Hinted(Visibility):
+@utils.super_class_property()
+class Hinted(Salience):
   """
   An outcome which is hinted at but not fully implied.
   """
   def __init__(self):
     super().__init__(self, 0.3)
 
-@super_class_property()
-class Implicit(Visibility):
+@utils.super_class_property()
+class Implicit(Salience):
   """
   An outcome which is implicit and thus apparent with some thinking.
   """
   def __init__(self):
     super().__init__(self, 0.7)
 
-@super_class_property()
-class Explicit(Visibility):
+@utils.super_class_property()
+class Explicit(Salience):
   """
   An outcome which is explicit and thus obvious.
   """
