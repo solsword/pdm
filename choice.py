@@ -61,6 +61,39 @@ class Outcome:
     else:
       self.actual_likelihood = Certainty(actual_likelihood)
 
+  def json(self):
+    """
+    Returns a json representation of this option.
+
+        "leave_it": {
+          "dislikes_abandonment": {
+            "salience": "explicit",
+            "apparent_likelihood": "certain",
+            "effects": {
+              "befriend_dragon": "bad"
+            }
+          },
+          "dies": {
+            "salience": "hinted",
+            "apparent_likelihood": "unlikely",
+            "actual_likelihood": "even",
+            "effects": {
+              "befriend_dragon": "awful"
+              "kill_dragon: "great"
+            }
+          }
+        }
+    """
+    return json.dump(
+      {
+        "salience": self.salience,
+        "apparent_likelihood": self.apparent_likelihood,
+        "actual_likelihood": self.actual_likelihood,
+        "effects": self.goal_effects
+      },
+      default=lambda obj:obj.json()
+    )
+
 class Option:
   """
   An option is one of several discrete options at a choice. It includes a set
@@ -86,6 +119,12 @@ class Option:
     )
 
     self.outcomes = { o.name: o for o in outcomes }
+
+  def json(self):
+    """
+    Returns a json representation of this option.
+    """
+    return json.dump(self.outcomes, default=lambda obj:obj.json())
 
   def add_outcome(self, outcome):
     """
@@ -161,6 +200,10 @@ class Choice:
 
     self.options = { o.name: o for o in options }
 
+  def __str__(self):
+    # TODO: Better here
+    return self.json()
+
   def add_option(self, option):
     """
     Adds the given option to this choice. Raises a KeyError if an option with
@@ -176,6 +219,15 @@ class Choice:
 
     self.options[option.name] = option
 
+  def json(self):
+    """
+    Returns a json representation of this choice.
+    """
+    return json.dump(
+      { "name": self.name, "options": self.options },
+      default=lambda obj:obj.json()
+    )
+
   def remove_option(self, option_name):
     """
     Removes the given option (by name) from this choice. Raises a KeyError if
@@ -190,52 +242,81 @@ class Choice:
       )
     del self.options[option_name]
 
+  def from_json(json):
+    """
+    A static method that parses a full choice definition from a json format and
+    returns a new Choice object. An example:
 
-def parse_choice(json):
-  """
-  Parses a full choice definition from a json format. An example:
-
-  {
-    name: "Rescue the baby dragon or not?",
-    options: {
-      rescue_it: {
-        bites_your_hand: {
-          salience: "implicit",
-          apparent_likelihood: "even",
-          effects: {
-            health_and_safety: "unsatisfactory",
-            befriend_dragon: "unsatisfactory",
+    {
+      "name": "Rescue the baby dragon or not?",
+      "options": {
+        "rescue_it": {
+          "bites_your_hand": {
+            "salience": "implicit",
+            "apparent_likelihood": "even",
+            "effects": {
+              "health_and_safety": "unsatisfactory",
+              "befriend_dragon": "unsatisfactory",
+            }
+          },
+          "appreciates_kindness": {
+            "salience": "explicit",
+            "apparent_likelihood": "likely",
+            "effects": {
+              "befriend_dragon": "good"
+            }
           }
         },
-        appreciates_kindness: {
-          salience: "explicit",
-          apparent_likelihood: "likely",
-          effects: {
-            befriend_dragon: "good"
-          }
-        }
-      },
 
-      leave_it: {
-        dislikes_abandonment: {
-          salience: "explicit",
-          apparent_likelihood: "certain",
-          effects: {
-            befriend_dragon: "bad"
-          }
-        },
-        dies: {
-          salience: "hinted",
-          apparent_likelihood: "unlikely",
-          actual_likelihood: "even",
-          effects: {
-            befriend_dragon: "awful"
-            kill_dragon: "great"
+        "leave_it": {
+          "dislikes_abandonment": {
+            "salience": "explicit",
+            "apparent_likelihood": "certain",
+            "effects": {
+              "befriend_dragon": "bad"
+            }
+          },
+          "dies": {
+            "salience": "hinted",
+            "apparent_likelihood": "unlikely",
+            "actual_likelihood": "even",
+            "effects": {
+              "befriend_dragon": "awful"
+              "kill_dragon: "great"
+            }
           }
         }
       }
     }
-  }
 
-  """
-  # TODO: Implement this!
+    """
+    obj = json.parse_string(json)
+    cn = obj["name"]
+    optobj = obj["options"]
+
+    options = []
+    for opn in optobj:
+      outcomes = []
+      outobj = optobj[opn]
+      for oun in outobj:
+        sal = outobj[oun]["salience"]
+        apl = outobj[oun]["apparent_likelihood"]
+        if "actual_likelihood" in outobj[oun]:
+          acl = outobj[oun]["actual_likelihood"]
+        else:
+          acl = outobj[oun]["apparent_likelihood"]
+        fx = outobj[oun]["effects"]
+
+        outcomes.append(
+          Outcome(
+            oun,
+            { gn: Valence(fx[gn]) for gn in fx },
+            Salience(sal),
+            Certainty(apl),
+            Certainty(acl)
+          )
+        )
+
+      options.append(Option(opn, outcomes))
+
+    return Choice(cn, options)

@@ -6,15 +6,79 @@ Common base types for player decision modelling.
 
 import utils
 
+class AbstractValueRange:
+  """
+  Represents an abstract range of values. Designed for use as a class attribute
+  of subtypes of NumberType (see NumberType.__new__).
+  """
+  def __init__(self, mn, val, mx):
+    """
+    Min, value, and max for this range.
+    """
+    self.mn = mn
+    self.val = val
+    self.mx = mx
+
+
+def infectious_math(cls):
+  """
+  Class decorator that makes inherited math ops infectious by reconstructing
+  results (probably horribly inefficient...).
+  """
+  for prp in [
+    "__add__", "__radd__",
+    "__sub__", "__rsub__",
+    "__mul__", "__rmul__",
+    "__matmul__", "__rmatmul__",
+    "__truediv__", "__rtruediv__",
+    "__floordiv__", "__rfloordiv__",
+    "__mod__", "__rmod__",
+    "__divmod__", "__rdivmod__",
+    "__pow__", "__rpow__",
+    "__lshift__", "__rlshift__",
+    "__rshift__", "__rrshift__",
+    "__and__", "__rand__",
+    "__xor__", "__rxor__",
+    "__or__", "__ror__",
+
+    "__neg__", "__rneg__",
+    "__pos__", "__rpos__",
+    "__abs__", "__rabs__",
+    "__invert__", "__rinvert__",
+  ]:
+    if hasattr(cls, prp):
+      def_impl = getattr(cls, prp)
+      def augment(method):
+        def augmented(self, *args, **kwargs):
+          nonlocal method
+          result = method.__get__(self).__call__(*args, **kwargs)
+          return cls(result)
+        return augmented
+      replacement = augment(def_impl)
+      replacement.__name__ = prp
+      setattr(cls, prp, replacement)
+
+  return cls
+
+
+@infectious_math
 class NumberType(float):
   """
   A numeric type w/ baggage.
   """
   def __new__(cls, val):
-    return float.__new__(cls, val)
-
-  def __init__(self, val):
-    float.__init__(self, val)
+    if isinstance(val, cls):
+      return val
+    elif isinstance(val, AbstractValueRange):
+      return float.__new__(cls, val.val)
+    elif isinstance(val, str) and hasattr(cls, val):
+      return getattr(cls, val)
+    else:
+      if hasattr(cls, "validate") and not cls.validate(val):
+        raise ValueError(
+          "Value {} is out-of-range for type {}.".format(val, cls.__name__)
+        )
+      return float.__new__(cls, val)
 
   def __str__(self):
     return repr(self)
@@ -23,274 +87,109 @@ class NumberType(float):
     return "{}({})".format(type(self).__name__, self.real)
 
 
-class Certianty(NumberType):
+def abstractable(cls):
+  """
+  A class decorator that scoops up AbstractValueRange class properties in order
+  to create .validate and .abstract methods for the class. Note that properties
+  added after the class is defined aren't counted. Each AbstractValueRange
+  found is is also replaced with a class instance constructed from it.
+  """
+  cls._ranges = []
+  for prp in dir(cls):
+    a = getattr(cls, prp)
+    if isinstance(a, AbstractValueRange):
+      cls._ranges.append(a)
+      setattr(cls, prp, cls(a.val))
+
+  cls._ranges = sorted(cls._ranges, key=lambda r: r.mn)
+
+  @classmethod
+  def validate(cls, val):
+    ovn = min(r.mn for r in cls._ranges)
+    ovx = max(r.mx for r in cls._ranges)
+
+    return (val >= ovn and val <= ovx)
+
+  @classmethod
+  def abstract(cls, val):
+    found = None
+    for r in cls._ranges[:-1]:
+      if (
+        ( r.mn == r.mx and val == r.mn )
+     or (val >= r.mn and val < r.mx)
+      ):
+        found = r.val
+      elif val < r.mn:
+        break
+
+    # check final range including top
+    if found == None:
+      r = cls._ranges[-1]
+      if (r.mn == r.mx and val == r.mn) or (val >= r.mn and val <= r.mx):
+        found = r.val
+
+    if found == None:
+      raise ValueError(
+        "Can't abstract value '{}' as a {}: outside acceptable range.".format(
+          val,
+          cls.__name__
+        )
+      )
+
+    return cls(found)
+
+  cls.validate = validate
+  cls.abstract = abstract
+  return cls
+
+
+@infectious_math
+@abstractable
+class Certainty(NumberType):
   """
   Represents different certainty levels. The argument should be either a number
   between 0 and 1 or a Certainty (which will be copied).
   """
-  def abstract(certainty):
-    """
-    Takes an arbitrary Certainty object (or just a probability between 0 and 1)
-    and returns an approximation in terms of the fixed certainty objects
-    defined below.
-    """
-    p = certainty
-    if isinstance(p, Certainty):
-      p = p.probability
-
-    # TODO: Add certainty grades "rare" and "expected"?
-    if 0 <= p < 0.05:
-      return Certainty.impossible
-    elif 0.05 <= p < 0.45:
-      return Certainty.unlikely
-    elif 0.45 <= p <= 0.55:
-      return Certainty.even
-    elif 0.55 < p <= 0.95:
-      return Certainty.likely
-    elif 0.95 < p <= 1.0:
-      return Certainty.certain
-    else:
-      raise ValueError(
-        "Can't find an abstract certainty from invalid probability {:.3f}."
-        .format(p)
-      )
-
-  def __init__(self, prob):
-    super().__init__(self, prob)
-    if not (0 <= self.real <= 1):
-      raise ValueError(
-        "Invalid certainty value {} (not in [0,1]).".format(prob)
-      )
+  impossible = AbstractValueRange(0, 0, 0)
+  inconceivable = AbstractValueRange(0, 0.001, 0.01)
+  rare = AbstractValueRange(0.01, 0.05, 0.1)
+  unlikely = AbstractValueRange(0.1, 0.2, 0.45)
+  even = AbstractValueRange(0.45, 0.5, 0.55)
+  likely = AbstractValueRange(0.55, 0.8, 0.9)
+  expected = AbstractValueRange(0.9, 0.95, 0.99)
+  certain = AbstractValueRange(0.99, 0.999, 1.0)
+  invioable = AbstractValueRange(1.0, 1.0, 1.0)
 
 
-@utils.super_class_property()
-class Impossible(Certainty):
-  """
-  Represents an event that can actually never occur.
-  """
-  def __init__(self):
-    super().__init__(self, 0.0)
-
-@utils.super_class_property()
-class Inconceivable(Certainty):
-  """
-  Represents an event that's extremely unlikely.
-  """
-  def __init__(self):
-    super().__init__(self, 0.001)
-
-@utils.super_class_property()
-class Unlikely(Certainty):
-  """
-  Represents an event that's fairly unlikely.
-  """
-  def __init__(self):
-    super().__init__(self, 0.2)
-
-@utils.super_class_property()
-class Even(Certainty):
-  """
-  Represents an event that's 50% likely.
-  """
-  def __init__(self):
-    super().__init__(self, 0.5)
-
-@utils.super_class_property()
-class Likely(Certainty):
-  """
-  Represents an event that's fairly likely.
-  """
-  def __init__(self):
-    super().__init__(self, 0.8)
-
-@utils.super_class_property()
-class Certain(Certainty):
-  """
-  Represents an event that's almost completely certain.
-  """
-  def __init__(self):
-    super().__init__(self, 0.999)
-
-@utils.super_class_property()
-class Inviolable(Certainty):
-  """
-  Represents an event that's actually certain.
-  """
-  def __init__(self):
-    super().__init__(self, 1.0)
-
-
+@infectious_math
+@abstractable
 class Valence(NumberType):
   """
   Represents goodness or badness, on an abstract scale from -1 to 1.
   """
-  def abstract(valence):
-    """
-    Takes an arbitrary Valence object (or just a valence between -1 and 1) and
-    returns an approximation in terms of the fixed valence objects defined
-    below.
-    """
-    v = valence
-    if isinstance(v, Valence):
-      v = v.value
-
-    # TODO: Add certainty grades "rare" and "expected"?
-    if -1 <= v < -0.8:
-      return Valence.awful
-    elif -0.8 <= v < -0.35:
-      return Valence.bad
-    elif -0.35 <= v < -0.05:
-      return Valence.unsatisfactory
-    elif -0.05 <= v <= 0.05:
-      return Valence.neutral
-    elif 0.05 < v <= 0.35:
-      return Valence.okay
-    elif 0.35 < v <= 0.8:
-      return Valence.good
-    elif 0.8 < v <= 1.0:
-      return Valence.great
-    else:
-      raise ValueError(
-        "Can't find an abstract valence from invalid value {:.3f}."
-        .format(v)
-      )
-
-  def __init__(self, val=0):
-    super().__init__(self, val)
-    if not (-1 <= val <= 1):
-      raise ValueError(
-        "Invalid valence value {} (not in [-1, 1]).".format(val)
-      )
+  awful = AbstractValueRange(-1, -0.95, -0.8)
+  bad = AbstractValueRange(-0.8, -0.6, -0.35)
+  unsatisfactory = AbstractValueRange(-0.35, -0.2, -0.05)
+  neutral = AbstractValueRange(-0.05, 0, 0.05)
+  okay = AbstractValueRange(0.05, 0.2, 0.35)
+  good = AbstractValueRange(0.35, 0.6, 0.8)
+  great = AbstractValueRange(0.8, 0.95, 1.0)
 
 
-@utils.super_class_property()
-class Awful(Valence):
-  """
-  A really bad value.
-  """
-  def __init__(self, *args, **kwargs):
-    super().__init__(self, *args, value=-0.95, **kwargs)
-
-@utils.super_class_property()
-class Bad(Valence):
-  """
-  A pretty bad value.
-  """
-  def __init__(self, *args, **kwargs):
-    super().__init__(self, *args, value=-0.6, **kwargs)
-
-@utils.super_class_property()
-class Unsatisfactory(Valence):
-  """
-  A slightly bad value.
-  """
-  def __init__(self, *args, **kwargs):
-    super().__init__(self, *args, value=-0.2, **kwargs)
-
-@utils.super_class_property()
-class Neutral(Valence):
-  """
-  The perfectly neutral value.
-  """
-  def __init__(self, *args, **kwargs):
-    super().__init__(self, *args, value=0, **kwargs)
-
-@utils.super_class_property()
-class Okay(Valence):
-  """
-  A slightly positive value.
-  """
-  def __init__(self, *args, **kwargs):
-    super().__init__(self, *args, value=0.2, **kwargs)
-
-@utils.super_class_property()
-class Good(Valence):
-  """
-  A reasonably positive value.
-  """
-  def __init__(self, *args, **kwargs):
-    super().__init__(self, *args, value=0.6, **kwargs)
-
-@utils.super_class_property()
-class Great(Valence):
-  """
-  A really positive value.
-  """
-  def __init__(self, *args, **kwargs):
-    super().__init__(self, *args, value=0.95, **kwargs)
-
-
+@infectious_math
+@abstractable
 class Salience(NumberType):
   """
   Salience indicates how apparent/relevant an outcome seems before a choice is
   made.
   """
-  def abstract(visibility):
-    """
-    Takes an arbitrary Salience object (or just a number between 0 and 1) and
-    returns an approximation in terms of the fixed visibility objects defined
-    below.
-    """
-    v = visibility
-    if isinstance(v, Salience):
-      v = v.value
-
-    if 0 <= v < 0.05:
-      return Salience.invisible
-    elif 0.05 <= v < 0.5:
-      return Salience.hinted
-    elif 0.5 <= v < 0.9:
-      return Salience.implicit
-    elif 0.9 <= v <= 1.0:
-      return Salience.explicit
-    else:
-      raise ValueError(
-        "Can't find an abstract visibility from invalid value {:.3f}."
-        .format(v)
-      )
-
-  def __init__(self, val=0):
-    super().__init__(self, val)
-    if not (0 <= val <= 1):
-      raise ValueError(
-        "Invalid salience value {} (not in [0, 1]).".format(val)
-      )
+  invisible = AbstractValueRange(0, 0, 0.05)
+  hinted = AbstractValueRange(0.05, 0.3, 0.5)
+  implicit = AbstractValueRange(0.5, 0.7, 0.9)
+  explicit = AbstractValueRange(0.9, 1.0, 1.0)
 
   def is_visible(self):
     """
     Returns whether or not this outcome has any visibility to the player.
     """
-    return self.value > 0
-
-
-@utils.super_class_property()
-class Invisible(Salience):
-  """
-  An outcome which is completely non-apparent.
-  """
-  def __init__(self):
-    super().__init__(self, 0.0)
-
-@utils.super_class_property()
-class Hinted(Salience):
-  """
-  An outcome which is hinted at but not fully implied.
-  """
-  def __init__(self):
-    super().__init__(self, 0.3)
-
-@utils.super_class_property()
-class Implicit(Salience):
-  """
-  An outcome which is implicit and thus apparent with some thinking.
-  """
-  def __init__(self):
-    super().__init__(self, 0.7)
-
-@utils.super_class_property()
-class Explicit(Salience):
-  """
-  An outcome which is explicit and thus obvious.
-  """
-  def __init__(self):
-    super().__init__(self, 1.0)
+    return self.real > 0

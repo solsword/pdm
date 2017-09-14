@@ -87,7 +87,7 @@ def super_class_property(*args, **kwargs):
   def add_superclass_property(cls):
     nonlocal args, kwargs
     mro = inspect.getmro(cls)
-    if len(mro <= 2):
+    if len(mro) <= 2:
       raise TypeError(
         (
           "Class {} can't be a super_class_property because it has no super "
@@ -95,6 +95,8 @@ def super_class_property(*args, **kwargs):
         ).format(cls)
       )
     parent = mro[1]
+    print("ARGS:", [repr(a) for a in args])
+    print()
     setattr(parent, cls.__name__.lower(), cls(*args, **kwargs))
     return cls
 
