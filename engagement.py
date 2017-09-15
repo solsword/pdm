@@ -34,7 +34,7 @@ class PriorityMethod:
     Takes a map from option names to maps from goal names to Prospective
     impression objects and factors it into several such maps based on different
     goal priority levels, while also assigning a salience modifier to each goal
-    name included in the map. Returns a pair of (models_list, goal_saliences).
+    name included in the map. Returns a pair of (models_list, goal_relevance).
     """
     raise NotImplementedError("You must use a subclass of PriorityMethod.")
 

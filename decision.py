@@ -17,18 +17,32 @@ class DecisionMethod:
   Decision modes reflect general strategies for making decisions based on
   modes of engagement and prospective impressions.
   """
-  def __init__(self, name_or_other="abstract"):
+  def __new__(cls, name_or_other="abstract"):
+    result = object.__new__(cls)
+
     if isinstance(name_or_other, DecisionMethod):
-      self.name = name_or_other.name
+      result.name = name_or_other.name
     else:
-      self.name = name_or_other
+      result.name = name_or_other
+
+    return result
+
+  def __eq__(self, other):
+    if not isinstance(other, type(self)):
+      return False
+    if other.name != self.name:
+      return False
+    return True
+
+  def __hash__(self):
+    return hash(type(self)) + 7 * hash(self.name)
 
   def decide(self, decision):
     """
     Overridden by subclasses to implement decision logic.
 
     This method takes as input a Decision object which should have
-    prospective_impressions and goal_saliences defined (see
+    prospective_impressions and goal_relevance defined (see
     Decision.add_prospective_impressions). Missing goal saliences will be
     treated as ones.
 
@@ -50,8 +64,8 @@ class Maximizing(DecisionMethod):
   tradeoffs can cause this attempt to fail, in which case resolution proceeds
   arbitrarily.
   """
-  def __init__(self):
-    super().__init__("maximizing")
+  def __new__(cls):
+    super().__new__(cls, "maximizing")
 
   def decide(self, decision):
     """
@@ -66,7 +80,7 @@ class Maximizing(DecisionMethod):
       )
 
     decision_model = decision.prospective_impressions
-    goal_saliences = decision.goal_saliences
+    goal_relevance = decision.goal_relevance
     # TODO: Implement this!
     pass
 
@@ -78,8 +92,8 @@ class Satisficing(DecisionMethod):
   outcome. Barring large differences, positive outcomes are all considered
   acceptable, and an arbitrary decision is made between acceptable options.
   """
-  def __init__(self):
-    super().__init__("satisficing")
+  def __new__(cls):
+    super().__new__(cls, "satisficing")
 
   def decide(self, decision):
     """
@@ -93,7 +107,7 @@ class Satisficing(DecisionMethod):
         "Can't make a decision until prospective impressions have been added."
       )
     decision_model = decision.prospective_impressions
-    goal_saliences = decision.goal_saliences
+    goal_relevance = decision.goal_relevance
     # TODO: Implement this!
     pass
 
@@ -108,8 +122,8 @@ class Utilizing(DecisionMethod):
   Note: this is a bullshit decision method which is numerically convenient but
   not at all accurate.
   """
-  def __init__(self):
-    super().__init__("utilizing")
+  def __new__(cls):
+    super().__new__(cls, "utilizing")
 
   def decide(self, decision):
     """
@@ -124,7 +138,7 @@ class Utilizing(DecisionMethod):
       )
 
     decision_model = decision.prospective_impressions
-    goal_saliences = decision.goal_saliences
+    goal_relevance = decision.goal_relevance
 
     utilities = {}
     for opt in decision_model:
@@ -132,8 +146,8 @@ class Utilizing(DecisionMethod):
       for goal in decision_model[opt]:
         for pri in decision_model[opt][goal]:
           utilities[opt] += pri.utility() * (
-            goal_saliences[goal]
-              if goal in goal_saliences
+            goal_relevance[goal]
+              if goal in goal_relevance
               else 1
           )
 
@@ -148,8 +162,8 @@ class Randomizing(DecisionMethod):
   Using a randomizing decision method, options are selected completely at
   random.
   """
-  def __init__(self):
-    super().__init__("randomizing")
+  def __new__(cls):
+    super().__new__(cls, "randomizing")
 
   def decide(self, decision):
     """
@@ -216,9 +230,83 @@ class Decision:
       }
 
     self.prospective_impressions = None
-    self.goal_saliences = None
+    self.factored_decision_models = None
+    self.goal_relevance = None
     self.retrospective_impressions = None
     self.simplified_retrospectives = None
+
+  def __eq__(self, other):
+    if not isinstance(other, Decision):
+      return False
+    if other.choice != self.choice:
+      return False
+    if other.option != self.option:
+      return False
+    if other.outcomes != self.outcomes:
+      return False
+    if other.prospective_impressions != self.prospective_impressions:
+      return False
+    if other.factored_decision_models != self.factored_decision_models:
+      return False
+    if other.goal_relevance != self.goal_relevance:
+      return False
+    if other.retrospective_impressions != self.retrospective_impressions:
+      return False
+    if other.simplified_retrospectives != self.simplified_retrospectives:
+      return False
+
+  def __hash__(self):
+    h = hash(self.choice)
+    h ^= hash(self.option)
+    for i, on in enumerate(self.outcomes):
+      if i % 2:
+        h ^= hash(self.outcomes[on])
+      else:
+        h += hash(self.outcomes[on])
+
+    if self.prospective_impressions:
+      for on in self.prospective_impressions:
+        option_impressions = self.prospective_impressions[on]
+        oh = hash(on)
+        for i, gn in enumerate(option_impressions):
+          if i % 2:
+            h ^= hash(tuple(option_impressions[gn])) + oh
+          else:
+            h += hash(tuple(option_impressions[gn])) ^ oh
+
+    if self.factored_decision_models:
+      for dm in self.factored_decision_models:
+        for on in dm:
+          option_impressions = dm[on]
+          oh = hash(on)
+          for i, gn in enumerate(option_impressions):
+            if i % 2:
+              h ^= hash(tuple(option_impressions[gn])) + oh
+            else:
+              h += hash(tuple(option_impressions[gn])) ^ oh
+
+    if self.goal_relevance:
+      for i, gn in enumerate(self.goal_relevance):
+        if i % 2:
+          h ^= hash(gn) + hash(self.goal_relevance[gn])
+        else:
+          h += hash(gn) ^ hash(self.goal_relevance[gn])
+
+    if self.retrospective_impressions:
+      for i, gn in enumerate(self.retrospective_impressions):
+        if i % 2:
+          h ^= hash(gn) + hash(tuple(self.retrospective_impressions[gn]))
+        else:
+          h += hash(gn) ^ hash(tuple(self.retrospective_impressions[gn]))
+
+    if self.simplified_retrospectives:
+      for i, gn in enumerate(self.simplified_retrospectives):
+        if i % 2:
+          h ^= hash(gn) + hash(self.simplified_retrospectives[gn])
+        else:
+          h += hash(gn) ^ hash(self.simplified_retrospectives[gn])
+
+    return h
 
   def select_option(self, selection):
     """
@@ -261,7 +349,7 @@ class Decision:
     """
     Adds prospective impressions 
     """
-    if self.prospective_impressions != None or self.goal_saliences != None:
+    if self.prospective_impressions != None or self.goal_relevance != None:
       raise RuntimeError(
         "Attempted to add prospective impressions to a decision which already "
         "has them."
@@ -271,7 +359,10 @@ class Decision:
       self.choice
     )
 
-    fdms, self.goal_saliences = priority_method.factor_decision_model(
+    (
+      self.factored_decision_models,
+      self.goal_relevance
+    ) = priority_method.factor_decision_model(
       self.decision_model
     )
 
@@ -311,6 +402,9 @@ class Decision:
             val = out.goal_effects[goal]
             self.retrospective_impressions[goal].append(
               perception.Retrospective(
+                goal=goal,
+                choice=self.choice.name,
+                option=self.option.name,
                 prospective=pri,
                 salience=1.0, # TODO: retrospective saliences would hook in here
                 valence=val
