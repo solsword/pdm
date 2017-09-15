@@ -5,6 +5,9 @@ Code for dealing with choice structures.
 """
 
 import random
+import json
+
+import utils
 
 from base_types import Certainty
 from base_types import Valence
@@ -61,14 +64,47 @@ class Outcome:
     else:
       self.actual_likelihood = Certainty(actual_likelihood)
 
-  def json(self):
+  def __str__(self):
+    # TODO: Better here
+    return self.json()
+
+  def __eq__(self, other):
+    if not isinstance(other, Outcome):
+      return False
+    if self.name != other.name:
+      return False
+    if self.goal_effects != other.goal_effects:
+      return False
+    if self.salience != other.salience:
+      return False
+    if self.apparent_likelihood != other.apparent_likelihood:
+      return False
+    if self.actual_likelihood != other.actual_likelihood:
+      return False
+    return True
+
+  def __hash__(self):
+    h = hash(self.name)
+    for i, g in enumerate(self.goal_effects):
+      if i % 2:
+        h ^= hash(self.goal_effects[g]) + hash(g)
+      else:
+        h += hash(self.goal_effects[g]) ^ hash(g)
+
+    h += hash(self.salience)
+    h ^= hash(self.apparent_likelihood)
+    h += hash(self.actual_likelihood)
+
+    return h
+
+  def json(self, indent=None):
     """
     Returns a json representation of this option.
 
         "leave_it": {
           "dislikes_abandonment": {
             "salience": "explicit",
-            "apparent_likelihood": "certain",
+            "apparent_likelihood": 0.97,
             "effects": {
               "befriend_dragon": "bad"
             }
@@ -79,19 +115,35 @@ class Outcome:
             "actual_likelihood": "even",
             "effects": {
               "befriend_dragon": "awful"
-              "kill_dragon: "great"
+              "kill_dragon": "great"
             }
           }
         }
     """
-    return json.dump(
-      {
-        "salience": self.salience,
-        "apparent_likelihood": self.apparent_likelihood,
-        "actual_likelihood": self.actual_likelihood,
-        "effects": self.goal_effects
-      },
-      default=lambda obj:obj.json()
+    if self.apparent_likelihood == self.actual_likelihood:
+      dd = {
+        "salience": self.salience.regular_form(),
+        "apparent_likelihood": self.apparent_likelihood.regular_form(),
+        "effects": {
+          g: self.goal_effects[g].regular_form()
+            for g in self.goal_effects
+        }
+      }
+    else:
+      dd = {
+        "salience": self.salience.regular_form(),
+        "apparent_likelihood": self.apparent_likelihood.regular_form(),
+        "actual_likelihood": self.actual_likelihood.regular_form(),
+        "effects": {
+          g: self.goal_effects[g].regular_form()
+            for g in self.goal_effects
+        }
+      }
+    return json.dumps(
+      dd,
+      indent=indent,
+      sort_keys=True,
+      default=lambda obj:json.loads(obj.json())
     )
 
 class Option:
@@ -111,7 +163,7 @@ class Option:
     """
     self.name = name
 
-    check_names(
+    utils.check_names(
       outcomes,
       "Two outcomes named '{{}}' cannot coexist within Option '{}'.".format(
         self.name
@@ -120,11 +172,40 @@ class Option:
 
     self.outcomes = { o.name: o for o in outcomes }
 
-  def json(self):
+  def __str__(self):
+    # TODO: Better here?
+    return self.json()
+
+  def __eq__(self, other):
+    if not isinstance(other, Option):
+      return False
+    if self.name != other.name:
+      return False
+    if self.outcomes != other.outcomes:
+      return False
+    return True
+
+  def __hash__(self):
+    h = hash(self.name)
+    for i, out in enumerate(self.outcomes):
+      if i % 2:
+        h ^= hash(self.outcomes[out])
+      else:
+        h += hash(self.outcomes[out])
+
+    return h
+
+
+  def json(self, indent=None):
     """
     Returns a json representation of this option.
     """
-    return json.dump(self.outcomes, default=lambda obj:obj.json())
+    return json.dumps(
+      self.outcomes,
+      indent=indent,
+      sort_keys=True,
+      default=lambda obj:json.loads(obj.json())
+    )
 
   def add_outcome(self, outcome):
     """
@@ -191,7 +272,7 @@ class Choice:
     """
     self.name = name
 
-    check_names(
+    utils.check_names(
       options,
       "Two options named '{{}}' cannot coexist within Choice '{}'.".format(
         self.name
@@ -203,6 +284,25 @@ class Choice:
   def __str__(self):
     # TODO: Better here
     return self.json()
+
+  def __eq__(self, other):
+    if not isinstance(other, Choice):
+      return False
+    if self.name != other.name:
+      return False
+    if self.options != other.options:
+      return False
+    return True
+
+  def __hash__(self):
+    h = hash(self.name)
+    for i, opt in enumerate(self.options):
+      if i % 2:
+        h ^= hash(self.options[opt])
+      else:
+        h += hash(self.options[opt])
+
+    return h
 
   def add_option(self, option):
     """
@@ -219,13 +319,15 @@ class Choice:
 
     self.options[option.name] = option
 
-  def json(self):
+  def json(self, indent=None):
     """
     Returns a json representation of this choice.
     """
-    return json.dump(
+    return json.dumps(
       { "name": self.name, "options": self.options },
-      default=lambda obj:obj.json()
+      indent=indent,
+      sort_keys=True,
+      default=lambda obj:json.loads(obj.json())
     )
 
   def remove_option(self, option_name):
@@ -242,55 +344,102 @@ class Choice:
       )
     del self.options[option_name]
 
-  def from_json(json):
+  def from_json(jin):
     """
     A static method that parses a full choice definition from a json format and
     returns a new Choice object. An example:
 
+    ```
     {
       "name": "Rescue the baby dragon or not?",
       "options": {
-        "rescue_it": {
-          "bites_your_hand": {
-            "salience": "implicit",
-            "apparent_likelihood": "even",
+        "leave_it": {
+          "dies": {
+            "actual_likelihood": "even",
+            "apparent_likelihood": "unlikely",
             "effects": {
-              "health_and_safety": "unsatisfactory",
-              "befriend_dragon": "unsatisfactory",
-            }
+              "befriend_dragon": "awful",
+              "kill_dragon": "great"
+            },
+            "salience": "hinted"
           },
+          "dislikes_abandonment": {
+            "apparent_likelihood": 0.97,
+            "effects": {
+              "befriend_dragon": "bad"
+            },
+            "salience": "explicit"
+          }
+        },
+        "rescue_it": {
           "appreciates_kindness": {
-            "salience": "explicit",
             "apparent_likelihood": "likely",
             "effects": {
               "befriend_dragon": "good"
-            }
-          }
-        },
-
-        "leave_it": {
-          "dislikes_abandonment": {
-            "salience": "explicit",
-            "apparent_likelihood": "certain",
-            "effects": {
-              "befriend_dragon": "bad"
-            }
+            },
+            "salience": "explicit"
           },
-          "dies": {
-            "salience": "hinted",
-            "apparent_likelihood": "unlikely",
-            "actual_likelihood": "even",
+          "bites_your_hand": {
+            "apparent_likelihood": "even",
             "effects": {
-              "befriend_dragon": "awful"
-              "kill_dragon: "great"
-            }
+              "befriend_dragon": "unsatisfactory",
+              "health_and_safety": "unsatisfactory"
+            },
+            "salience": "implicit"
           }
         }
       }
     }
-
+    ```
+    Choice(
+      "Rescue the baby dragon or not?", 
+      [
+        Option(
+          "rescue_it",
+          [
+            Outcome(
+              "bites_your_hand",
+              {
+                "health_and_safety": Valence("unsatisfactory"),
+                "befriend_dragon": Valence("unsatisfactory"),
+              },
+              Salience("implicit"),
+              Certainty("even"),
+            ),
+            Outcome(
+              "appreciates_kindness",
+              { "befriend_dragon": "good" },
+              "explicit",
+              "likely",
+            )
+          ]
+        ),
+        Option(
+          "leave_it",
+          [
+            Outcome(
+              "dislikes_abandonment",
+              { "befriend_dragon": "bad" },
+              "explicit",
+              0.97,
+            ),
+            Outcome(
+              "dies",
+              {
+                "befriend_dragon": "awful",
+                "kill_dragon": "great"
+              },
+              "hinted",
+              "unlikely",
+              actual_likelihood="even"
+            )
+          ]
+        )
+      ]
+    )
+    ```
     """
-    obj = json.parse_string(json)
+    obj = json.loads(jin)
     cn = obj["name"]
     optobj = obj["options"]
 

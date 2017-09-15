@@ -7,6 +7,8 @@ Unit tests.
 
 import traceback
 
+import utils
+
 all_tests = []
 def test(f):
   all_tests.append(f)
@@ -22,6 +24,30 @@ def test_types():
   assert(c == 0.0)
 
   assert(type(c + 0.1) == Certainty)
+
+  assert(str(c) == "Certainty(0.0)")
+  assert(c.regular_form() == "impossible")
+
+  return True
+
+@test
+def test_choice_json():
+  from base_types import Certainty, Valence, Salience
+  from choice import Choice, Option, Outcome
+  fj = Choice.from_json
+  test_stuff = fj.__doc__.split("```")
+
+  tin = utils.dedent(test_stuff[1])
+  tcmp = utils.dedent(test_stuff[2])
+
+  c = Choice.from_json(tin)
+  calt = eval(tcmp)
+  jrec = c.json(indent=2)
+  crec = Choice.from_json(jrec)
+
+  assert(c == calt)
+  assert("\n" + jrec + "\n" == tin)
+  assert(c == crec)
 
   return True
 

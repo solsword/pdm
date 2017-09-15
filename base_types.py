@@ -5,6 +5,7 @@ Common base types for player decision modelling.
 """
 
 import utils
+import json
 
 class AbstractValueRange:
   """
@@ -74,11 +75,12 @@ class NumberType(float):
     elif isinstance(val, str) and hasattr(cls, val):
       return getattr(cls, val)
     else:
-      if hasattr(cls, "validate") and not cls.validate(val):
+      nv = float.__new__(cls, val)
+      if hasattr(cls, "validate") and not cls.validate(nv):
         raise ValueError(
           "Value {} is out-of-range for type {}.".format(val, cls.__name__)
         )
-      return float.__new__(cls, val)
+      return nv
 
   def __str__(self):
     return repr(self)
@@ -98,22 +100,22 @@ def abstractable(cls):
   for prp in dir(cls):
     a = getattr(cls, prp)
     if isinstance(a, AbstractValueRange):
-      cls._ranges.append(a)
+      cls._ranges.append((prp, a))
       setattr(cls, prp, cls(a.val))
 
-  cls._ranges = sorted(cls._ranges, key=lambda r: r.mn)
+  cls._ranges = sorted(cls._ranges, key=lambda nr: nr[1].mn)
 
   @classmethod
   def validate(cls, val):
-    ovn = min(r.mn for r in cls._ranges)
-    ovx = max(r.mx for r in cls._ranges)
+    ovn = min(r.mn for (n, r) in cls._ranges)
+    ovx = max(r.mx for (n, r) in cls._ranges)
 
-    return (val >= ovn and val <= ovx)
+    return (isinstance(val, float) and val >= ovn and val <= ovx)
 
   @classmethod
   def abstract(cls, val):
     found = None
-    for r in cls._ranges[:-1]:
+    for (n, r) in cls._ranges[:-1]:
       if (
         ( r.mn == r.mx and val == r.mn )
      or (val >= r.mn and val < r.mx)
@@ -124,7 +126,7 @@ def abstractable(cls):
 
     # check final range including top
     if found == None:
-      r = cls._ranges[-1]
+      (n, r) = cls._ranges[-1]
       if (r.mn == r.mx and val == r.mn) or (val >= r.mn and val <= r.mx):
         found = r.val
 
@@ -138,8 +140,15 @@ def abstractable(cls):
 
     return cls(found)
 
+  def regular_form(self):
+    for (n, r) in type(self)._ranges:
+      if self == r.val:
+        return n
+    return self
+
   cls.validate = validate
   cls.abstract = abstract
+  cls.regular_form = regular_form
   return cls
 
 
