@@ -23,16 +23,16 @@ def test(f):
 @test
 def test_types():
   c = Certainty(0.78)
-  assert(Certainty.abstract(c) == Certainty.likely)
-  assert(Certainty.abstract(c) == Certainty("likely"))
+  assert Certainty.abstract(c) == Certainty.likely
+  assert Certainty.abstract(c) == Certainty("likely")
 
   c = Certainty("impossible")
-  assert(c == 0.0)
+  assert c == 0.0
 
-  assert(type(c + 0.1) == Certainty)
+  assert type(c + 0.1) == Certainty
 
-  assert(str(c) == "Certainty(0.0)")
-  assert(c.regular_form() == "impossible")
+  assert str(c) == "Certainty(0.0)"
+  assert c.regular_form() == "impossible"
 
   return True
 
@@ -47,16 +47,30 @@ def mktest_json(cls):
 
     o = cls.from_json(tin)
     oalt = eval(tcmp)
-    jrec = c.json(indent=2)
+    jrec = o.json(indent=2)
     orec = cls.from_json(jrec)
 
-    assert(o == oalt)
-    assert("\n" + jrec + "\n" == tin)
-    assert(o == orec)
+    assert o == oalt, (
+      "Object from JSON doesn't match eval'd version:\n```\n{}\n```\n{}\n```"
+      .format(repr(o), repr(oalt))
+    )
+
+    assert "\n" + jrec + "\n" == tin, (
+      "JSON doesn't match reproduced JSON:\n```\n{}\n```\n{}\n```".format(
+        "\n" + jrec + "\n",
+        tin
+      )
+    )
+    assert o == orec, (
+      "Object from JSON doesn't match reconstruction:\n```\n{}\n```\n{}\n```"
+      .format(
+        repr(o),
+        repr(orec)
+      )
+    )
 
     return True
 
-  print(test_json)
   test_json.__name__ = "test_" + cls.__name__.lower() + "_json"
 
 mktest_json(Choice)

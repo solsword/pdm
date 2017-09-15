@@ -27,10 +27,14 @@ def conform_keys(
 
   Modifies the given "suspect" dictionary in-place.
   """
+  toremove = set()
   for k in list(suspect.keys()):
     if k not in valid:
       raise RuntimeWarning(message.format(k))
-      del suspect[k]
+      toremove.add(k)
+
+  for k in toremove:
+    del suspect[k]
 
   if default != NoDefault:
     for k in valid:
@@ -95,8 +99,6 @@ def super_class_property(*args, **kwargs):
         ).format(cls)
       )
     parent = mro[1]
-    print("ARGS:", [repr(a) for a in args])
-    print()
     setattr(parent, cls.__name__.lower(), cls(*args, **kwargs))
     return cls
 

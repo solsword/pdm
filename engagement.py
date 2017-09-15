@@ -16,6 +16,8 @@ DEFAULT_PRIORITY:
   The default priority for goals whose priority is not specified.
 """
 
+import json
+
 import utils
 
 import perception
@@ -99,12 +101,12 @@ class ModeOfEngagement:
   A ModeOfEngagement represents a set of goals, each with its own priority
   value. They are used to build player models (see player.py).
   """
-  def __init__(self, name, goals=None, priorities=None):
+  def __init__(self, name, goal_list=None, priorities=None):
     """
     name:
       The name for this mode of engagement.
 
-    goals:
+    goal_list:
       A list of PlayerGoal objects. If left unspecified, it will default to an
       empty list.
 
@@ -117,15 +119,15 @@ class ModeOfEngagement:
     """
     self.name = name
     self.goals = {}
-    if goals:
-      for g in goals:
+    if goal_list:
+      for g in goal_list:
         if isinstance(g, goals.PlayerGoal):
           self.goals[g.name] = g
         elif isinstance(g, str):
           self.goals[g] = goals.PlayerGoal(g)
         else:
           raise TypeError("MoE goals must be PlayerGoal objects or strings.")
-    self.goals = { g.name: g for g in goals } if goals else {}
+
     self.priorities = priorities or {}
     utils.conform_keys(
       self.goals.keys(),
@@ -134,11 +136,29 @@ class ModeOfEngagement:
       (
         "ModeOfEngagement '{}' constructed with priority for goal '{}', "
         "but that goal is not one of the goals given."
-      ).format(self.name)
+      ).format(self.name, "{}")
     )
 
-    for tr in toremove:
-      del self.priorities[tr]
+  def __eq__(self, other):
+    if not isinstance(other, ModeOfEngagement):
+      return False
+    if other.name != self.name:
+      return False
+    if other.priorities != self.priorities:
+      return False
+    return True
+
+  def __hash__(self):
+    h = hash(self.name)
+    for i, gn in enumerate(self.goals):
+      if i % 2:
+        h ^= hash(self.goals[gn])
+        h += hash(self.priorities[gn])
+      else:
+        h += hash(self.goals[gn])
+        h ^= hash(self.priorities[gn])
+
+    return h
 
   def json(self, indent=None):
     """
@@ -160,7 +180,10 @@ class ModeOfEngagement:
     ```
     {
       "name": "friendly_but_cautious",
-      "goals": [ "befriend_dragon", "health_and_safety" ],
+      "goals": [
+        "befriend_dragon",
+        "health_and_safety"
+      ],
       "priorities": {
         "befriend_dragon": 2,
         "health_and_safety": 1
