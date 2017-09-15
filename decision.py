@@ -21,7 +21,7 @@ class DecisionMethod:
     if isinstance(name_or_other, DecisionMethod):
       self.name = name_or_other.name
     else:
-      self.name = name
+      self.name = name_or_other
 
   def decide(self, decision):
     """
@@ -42,7 +42,7 @@ class DecisionMethod:
       "DecisionMethod itself!"
     )
 
-@super_class_property()
+@utils.super_class_property()
 class Maximizing(DecisionMethod):
   """
   Using a maximizing decision method, options are compared in an attempt to
@@ -51,7 +51,7 @@ class Maximizing(DecisionMethod):
   arbitrarily.
   """
   def __init__(self):
-    super().__init__(self, "maximizing")
+    super().__init__("maximizing")
 
   def decide(self, decision):
     """
@@ -70,7 +70,7 @@ class Maximizing(DecisionMethod):
     # TODO: Implement this!
     pass
 
-@super_class_property()
+@utils.super_class_property()
 class Satisficing(DecisionMethod):
   """
   Using a satisficing decision method, options are inspected to find one that
@@ -79,7 +79,7 @@ class Satisficing(DecisionMethod):
   acceptable, and an arbitrary decision is made between acceptable options.
   """
   def __init__(self):
-    super().__init__(self, "satisficing")
+    super().__init__("satisficing")
 
   def decide(self, decision):
     """
@@ -97,7 +97,7 @@ class Satisficing(DecisionMethod):
     # TODO: Implement this!
     pass
 
-@super_class_property()
+@utils.super_class_property()
 class Utilizing(DecisionMethod):
   """
   Using a utilizing decision method, utilities are computed for each option by
@@ -109,7 +109,7 @@ class Utilizing(DecisionMethod):
   not at all accurate.
   """
   def __init__(self):
-    super().__init__(self, "utilizing")
+    super().__init__("utilizing")
 
   def decide(self, decision):
     """
@@ -142,14 +142,14 @@ class Utilizing(DecisionMethod):
 
     return random.choice(best)
 
-@super_class_property()
+@utils.super_class_property()
 class Randomizing(DecisionMethod):
   """
   Using a randomizing decision method, options are selected completely at
   random.
   """
   def __init__(self):
-    super().__init__(self, "utilizing")
+    super().__init__("randomizing")
 
   def decide(self, decision):
     """

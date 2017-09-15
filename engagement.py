@@ -19,6 +19,7 @@ DEFAULT_PRIORITY:
 import utils
 
 import perception
+import goals
 
 DEFAULT_PRIORITY = 5
 
@@ -35,7 +36,7 @@ class PriorityMethod:
     """
     raise NotImplementedError("You must use a subclass of PriorityMethod.")
 
-@super_class_property()
+@utils.super_class_property()
 class Soft(PriorityMethod):
   """
   In Soft mode, priorities represent relative importance, with each integer
@@ -59,7 +60,7 @@ class Soft(PriorityMethod):
     relevances = { gn: self.falloff**(priorities[gn]-1) for gn in all_goals }
     return models, relevances
 
-@super_class_property()
+@utils.super_class_property()
 class Hard(PriorityMethod):
   """
   In Hard mode, priorities represent absolute precedence, so decisions are
@@ -94,6 +95,10 @@ class Hard(PriorityMethod):
     return models, relevances
 
 class ModeOfEngagement:
+  """
+  A ModeOfEngagement represents a set of goals, each with its own priority
+  value. They are used to build player models (see player.py).
+  """
   def __init__(self, name, goals=None, priorities=None):
     """
     name:
@@ -111,6 +116,15 @@ class ModeOfEngagement:
       warning.
     """
     self.name = name
+    self.goals = {}
+    if goals:
+      for g in goals:
+        if isinstance(g, goals.PlayerGoal):
+          self.goals[g.name] = g
+        elif isinstance(g, str):
+          self.goals[g] = goals.PlayerGoal(g)
+        else:
+          raise TypeError("MoE goals must be PlayerGoal objects or strings.")
     self.goals = { g.name: g for g in goals } if goals else {}
     self.priorities = priorities or {}
     utils.conform_keys(
@@ -125,6 +139,50 @@ class ModeOfEngagement:
 
     for tr in toremove:
       del self.priorities[tr]
+
+  def json(self, indent=None):
+    """
+    Returns a JSON representation of this object.
+    """
+    return json.dumps(
+      {
+        "name": self.name,
+        "goals": [ gn for gn in self.goals ],
+        "priorities": self.priorities
+      },
+      indent=indent
+    )
+
+  def from_json(jin):
+    """
+    Static method for parsing javacript to create a ModeOfEngagement. Example:
+
+    ```
+    {
+      "name": "friendly_but_cautious",
+      "goals": [ "befriend_dragon", "health_and_safety" ],
+      "priorities": {
+        "befriend_dragon": 2,
+        "health_and_safety": 1
+      }
+    }
+    ```
+    ModeOfEngagement(
+      "friendly_but_cautious",
+      [ "befriend_dragon", "health_and_safety" ],
+      {
+        "befriend_dragon": 2,
+        "health_and_safety": 1
+      }
+    )
+    ```
+    """
+    obj = json.loads(jin)
+    return ModeOfEngagement(
+      obj["name"],
+      obj["goals"],
+      obj["priorities"]
+    )
 
   def get_goals(self):
     """

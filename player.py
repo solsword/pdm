@@ -43,7 +43,7 @@ class PlayerModel:
     priority_method=engagement.PriorityMethod.soft,
     mode_ranking=None,
     mode_adjustments=None,
-    goal_adjustments=None
+    goal_adjustments=None,
     goal_overrides=None
   ):
     """
@@ -231,6 +231,10 @@ class PlayerModel:
     self._synthesize_moe()
 
   def impute_retrospective_impressions(self, choice):
+    """
+    TODO: HERE
+    """
+    pass
 
 
   def make_decision(self, choice, outcomes=None):

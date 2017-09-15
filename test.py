@@ -9,13 +9,19 @@ import traceback
 
 import utils
 
+from base_types import Certainty, Valence, Salience
+from choice import Choice, Option, Outcome
+from engagement import PriorityMethod, ModeOfEngagement
+from player import PlayerModel
+from decision import DecisionMethod, Decision
+
 all_tests = []
 def test(f):
   all_tests.append(f)
+  return f
 
 @test
 def test_types():
-  from base_types import Certainty, Valence, Salience
   c = Certainty(0.78)
   assert(Certainty.abstract(c) == Certainty.likely)
   assert(Certainty.abstract(c) == Certainty("likely"))
@@ -30,26 +36,31 @@ def test_types():
 
   return True
 
-@test
-def test_choice_json():
-  from base_types import Certainty, Valence, Salience
-  from choice import Choice, Option, Outcome
-  fj = Choice.from_json
-  test_stuff = fj.__doc__.split("```")
+def mktest_json(cls):
+  @test
+  def test_json():
+    fj = cls.from_json
+    test_stuff = fj.__doc__.split("```")
 
-  tin = utils.dedent(test_stuff[1])
-  tcmp = utils.dedent(test_stuff[2])
+    tin = utils.dedent(test_stuff[1])
+    tcmp = utils.dedent(test_stuff[2])
 
-  c = Choice.from_json(tin)
-  calt = eval(tcmp)
-  jrec = c.json(indent=2)
-  crec = Choice.from_json(jrec)
+    o = cls.from_json(tin)
+    oalt = eval(tcmp)
+    jrec = c.json(indent=2)
+    orec = cls.from_json(jrec)
 
-  assert(c == calt)
-  assert("\n" + jrec + "\n" == tin)
-  assert(c == crec)
+    assert(o == oalt)
+    assert("\n" + jrec + "\n" == tin)
+    assert(o == orec)
 
-  return True
+    return True
+
+  print(test_json)
+  test_json.__name__ = "test_" + cls.__name__.lower() + "_json"
+
+mktest_json(Choice)
+mktest_json(ModeOfEngagement)
 
 def main():
   for t in all_tests:

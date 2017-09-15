@@ -4,7 +4,7 @@ perception.py
 Code for modelling option and outcome perceptions.
 """
 
-from base_types import Certainty
+from base_types import Certainty, Valence, Salience
 
 class Percept:
   """
@@ -189,7 +189,7 @@ class Retrospective(Percept):
   def __init__(
     self,
     *args,
-    prospective=None
+    prospective=None,
     expected_valence=Valence.neutral,
     expected_certainty=Certainty.likely,
     expected_salience=Salience.explicit,
