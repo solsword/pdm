@@ -5,7 +5,6 @@ Code for dealing with choice structures.
 """
 
 import random
-import json
 
 import utils
 
@@ -66,7 +65,7 @@ class Outcome:
 
   def __str__(self):
     # TODO: Better here
-    return self.json()
+    return str(self.pack())
 
   def __eq__(self, other):
     if not isinstance(other, Outcome):
@@ -97,31 +96,37 @@ class Outcome:
 
     return h
 
-  def json(self, indent=None):
+  def pack(self):
     """
-    Returns a json representation of this option.
+    Returns a simple representation of this option suitable for direct
+    conversion to JSON.
 
-        "leave_it": {
-          "dislikes_abandonment": {
-            "salience": "explicit",
-            "apparent_likelihood": 0.97,
-            "effects": {
-              "befriend_dragon": "bad"
-            }
-          },
-          "dies": {
-            "salience": "hinted",
-            "apparent_likelihood": "unlikely",
-            "actual_likelihood": "even",
-            "effects": {
-              "befriend_dragon": "awful"
-              "kill_dragon": "great"
-            }
-          }
-        }
+    Example:
+
+    ```
+    Outcome(
+      "dies",
+      { "befriend_dragon": "awful", "kill_dragon": "great" },
+      "hinted",
+      "unlikely",
+      "even"
+    )
+    ```
+    {
+      "actual_likelihood": "even",
+      "apparent_likelihood": "unlikely",
+      "effects": {
+        "befriend_dragon": "awful",
+        "kill_dragon": "great"
+      },
+      "name": "dies",
+      "salience": "hinted"
+    }
+    ```
     """
     if self.apparent_likelihood == self.actual_likelihood:
-      dd = {
+      return {
+        "name": self.name,
         "salience": self.salience.regular_form(),
         "apparent_likelihood": self.apparent_likelihood.regular_form(),
         "effects": {
@@ -130,7 +135,8 @@ class Outcome:
         }
       }
     else:
-      dd = {
+      return {
+        "name": self.name,
         "salience": self.salience.regular_form(),
         "apparent_likelihood": self.apparent_likelihood.regular_form(),
         "actual_likelihood": self.actual_likelihood.regular_form(),
@@ -139,11 +145,18 @@ class Outcome:
             for g in self.goal_effects
         }
       }
-    return json.dumps(
-      dd,
-      indent=indent,
-      sort_keys=True,
-      default=lambda obj:json.loads(obj.json())
+
+  def unpack(obj):
+    """
+    The inverse of `pack`; constructs an instance from a simple object (e.g.,
+    one produced by json.loads).
+    """
+    return Outcome(
+      obj["name"],
+      obj["effects"],
+      obj["salience"],
+      obj["apparent_likelihood"],
+      obj["actual_likelihood"] if "actual_likelihood" in obj else None
     )
 
 class Option:
@@ -174,7 +187,7 @@ class Option:
 
   def __str__(self):
     # TODO: Better here?
-    return self.json()
+    return str(self.pack())
 
   def __eq__(self, other):
     if not isinstance(other, Option):
@@ -196,15 +209,76 @@ class Option:
     return h
 
 
-  def json(self, indent=None):
+  def pack(self, indent=None):
     """
-    Returns a json representation of this option.
+    Returns a simple representation of this option suitable for direct
+    conversion to JSON.
+
+    Example:
+
+    ```
+    Option(
+      "leave_it",
+      [
+        Outcome(
+          "dies",
+          { "befriend_dragon": "awful", "kill_dragon": "great" },
+          "hinted",
+          "unlikely",
+          "even"
+        ),
+        Outcome(
+          "dislikes_abandonment",
+          { "befriend_dragon": "bad" },
+          "explicit",
+          0.97
+        )
+      ]
+    )
+    ```
+    {
+      "name": "leave_it",
+      "outcomes": [
+        {
+          "actual_likelihood": "even",
+          "apparent_likelihood": "unlikely",
+          "effects": {
+            "befriend_dragon": "awful",
+            "kill_dragon": "great"
+          },
+          "name": "dies",
+          "salience": "hinted"
+        },
+        {
+          "apparent_likelihood": 0.97,
+          "effects": {
+            "befriend_dragon": "bad"
+          },
+          "name": "dislikes_abandonment",
+          "salience": "explicit"
+        },
+      ]
+    }
+    ```
     """
-    return json.dumps(
-      self.outcomes,
-      indent=indent,
-      sort_keys=True,
-      default=lambda obj:json.loads(obj.json())
+    outcomes = [
+      self.outcomes[k].pack()
+        for k in sorted(list(self.outcomes.keys()))
+    ]
+    return {
+      "name": self.name,
+      "outcomes": outcomes
+    }
+
+  def unpack(obj):
+    """
+    The inverse of `pack`; takes a simple object (e.g., from json.loads) and
+    returns an Option instance.
+    """
+    outcomes = [ Outcome.unpack(o) for o in obj["outcomes"] ]
+    return Option(
+      obj["name"],
+      outcomes
     )
 
   def add_outcome(self, outcome):
@@ -283,7 +357,7 @@ class Choice:
 
   def __str__(self):
     # TODO: Better here
-    return self.json()
+    return str(self.pack())
 
   def __eq__(self, other):
     if not isinstance(other, Choice):
@@ -319,77 +393,14 @@ class Choice:
 
     self.options[option.name] = option
 
-  def json(self, indent=None):
+  def pack(self):
     """
-    Returns a json representation of this choice.
-    """
-    return json.dumps(
-      { "name": self.name, "options": self.options },
-      indent=indent,
-      sort_keys=True,
-      default=lambda obj:json.loads(obj.json())
-    )
+    Returns a simple representation of this choice, suitable for direct
+    conversion to JSON.
 
-  def remove_option(self, option_name):
-    """
-    Removes the given option (by name) from this choice. Raises a KeyError if
-    that option isn't present.
-    """
-    if option_name not in self.options:
-      raise KeyError(
-        "Choice '{}' doesn't contain an option '{}'.".format(
-          self.name,
-          option_name
-        )
-      )
-    del self.options[option_name]
+    Example:
 
-  def from_json(jin):
-    """
-    A static method that parses a full choice definition from a json format and
-    returns a new Choice object. An example:
 
-    ```
-    {
-      "name": "Rescue the baby dragon or not?",
-      "options": {
-        "leave_it": {
-          "dies": {
-            "actual_likelihood": "even",
-            "apparent_likelihood": "unlikely",
-            "effects": {
-              "befriend_dragon": "awful",
-              "kill_dragon": "great"
-            },
-            "salience": "hinted"
-          },
-          "dislikes_abandonment": {
-            "apparent_likelihood": 0.97,
-            "effects": {
-              "befriend_dragon": "bad"
-            },
-            "salience": "explicit"
-          }
-        },
-        "rescue_it": {
-          "appreciates_kindness": {
-            "apparent_likelihood": "likely",
-            "effects": {
-              "befriend_dragon": "good"
-            },
-            "salience": "explicit"
-          },
-          "bites_your_hand": {
-            "apparent_likelihood": "even",
-            "effects": {
-              "befriend_dragon": "unsatisfactory",
-              "health_and_safety": "unsatisfactory"
-            },
-            "salience": "implicit"
-          }
-        }
-      }
-    }
     ```
     Choice(
       "Rescue the baby dragon or not?", 
@@ -438,34 +449,86 @@ class Choice:
       ]
     )
     ```
+    {
+      "name": "Rescue the baby dragon or not?",
+      "options": {
+        "leave_it": {
+          "name": "leave_it",
+          "outcomes": [
+            {
+              "actual_likelihood": "even",
+              "apparent_likelihood": "unlikely",
+              "effects": {
+                "befriend_dragon": "awful",
+                "kill_dragon": "great"
+              },
+              "name": "dies",
+              "salience": "hinted"
+            },
+            {
+              "apparent_likelihood": 0.97,
+              "effects": {
+                "befriend_dragon": "bad"
+              },
+              "name": "dislikes_abandonment",
+              "salience": "explicit"
+            },
+          ]
+        },
+        "rescue_it": {
+          "name": "rescue_it",
+          "outcomes": [
+            {
+              "apparent_likelihood": "likely",
+              "effects": {
+                "befriend_dragon": "good"
+              },
+              "name": "appreciates_kindness",
+              "salience": "explicit"
+            },
+            {
+              "apparent_likelihood": "even",
+              "effects": {
+                "befriend_dragon": "unsatisfactory",
+                "health_and_safety": "unsatisfactory"
+              },
+              "name": "bites_your_hand",
+              "salience": "implicit"
+            }
+          ]
+        }
+      }
+    }
+    ```
     """
-    obj = json.loads(jin)
-    cn = obj["name"]
-    optobj = obj["options"]
+    return {
+      "name": self.name,
+      "options": {
+        k: self.options[k].pack()
+          for k in self.options
+      }
+    }
 
-    options = []
-    for opn in optobj:
-      outcomes = []
-      outobj = optobj[opn]
-      for oun in outobj:
-        sal = outobj[oun]["salience"]
-        apl = outobj[oun]["apparent_likelihood"]
-        if "actual_likelihood" in outobj[oun]:
-          acl = outobj[oun]["actual_likelihood"]
-        else:
-          acl = outobj[oun]["apparent_likelihood"]
-        fx = outobj[oun]["effects"]
+  def unpack(obj):
+    """
+    The inverse of `pack`; takes a simple object and returns a Choice instance.
+    """
+    opts = obj["options"]
+    return Choice(
+      obj["name"],
+      [ Option.unpack(opts[k]) for k in opts ]
+    )
 
-        outcomes.append(
-          Outcome(
-            oun,
-            { gn: Valence(fx[gn]) for gn in fx },
-            Salience(sal),
-            Certainty(apl),
-            Certainty(acl)
-          )
+  def remove_option(self, option_name):
+    """
+    Removes the given option (by name) from this choice. Raises a KeyError if
+    that option isn't present.
+    """
+    if option_name not in self.options:
+      raise KeyError(
+        "Choice '{}' doesn't contain an option '{}'.".format(
+          self.name,
+          option_name
         )
-
-      options.append(Option(opn, outcomes))
-
-    return Choice(cn, options)
+      )
+    del self.options[option_name]

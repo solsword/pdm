@@ -5,7 +5,6 @@ Common base types for player decision modelling.
 """
 
 import utils
-import json
 
 class AbstractValueRange:
   """

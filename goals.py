@@ -28,3 +28,15 @@ class PlayerGoal:
 
   def __hash__(self):
     return 17 + 31 * hash(self.name)
+
+  def pack(self):
+    """
+    Packs this goal as a simple object, suitable for conversion to JSON.
+    """
+    return self.name
+
+  def unpack(obj):
+    """
+    Inverse of `pack`; creates an instance from a simple object.
+    """
+    return PlayerGoal(obj)

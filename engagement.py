@@ -16,12 +16,10 @@ DEFAULT_PRIORITY:
   The default priority for goals whose priority is not specified.
 """
 
-import json
-
 import utils
 
-import perception
-import goals
+from perception import Prospective
+from goals import PlayerGoal
 
 DEFAULT_PRIORITY = 5
 
@@ -121,10 +119,10 @@ class ModeOfEngagement:
     self.goals = {}
     if goal_list:
       for g in goal_list:
-        if isinstance(g, goals.PlayerGoal):
+        if isinstance(g, PlayerGoal):
           self.goals[g.name] = g
         elif isinstance(g, str):
-          self.goals[g] = goals.PlayerGoal(g)
+          self.goals[g] = PlayerGoal(g)
         else:
           raise TypeError("MoE goals must be PlayerGoal objects or strings.")
 
@@ -160,23 +158,22 @@ class ModeOfEngagement:
 
     return h
 
-  def json(self, indent=None):
+  def pack(self):
     """
-    Returns a JSON representation of this object.
-    """
-    return json.dumps(
+    Returns a simple representation of this object, suitable for conversion to
+    JSON.
+
+    Example:
+
+    ```
+    ModeOfEngagement(
+      "friendly_but_cautious",
+      [ "befriend_dragon", "health_and_safety" ],
       {
-        "name": self.name,
-        "goals": [ gn for gn in self.goals ],
-        "priorities": self.priorities
-      },
-      indent=indent
+        "befriend_dragon": 2,
+        "health_and_safety": 1
+      }
     )
-
-  def from_json(jin):
-    """
-    Static method for parsing javacript to create a ModeOfEngagement. Example:
-
     ```
     {
       "name": "friendly_but_cautious",
@@ -190,20 +187,20 @@ class ModeOfEngagement:
       }
     }
     ```
-    ModeOfEngagement(
-      "friendly_but_cautious",
-      [ "befriend_dragon", "health_and_safety" ],
-      {
-        "befriend_dragon": 2,
-        "health_and_safety": 1
-      }
-    )
-    ```
     """
-    obj = json.loads(jin)
+    return {
+      "name": self.name,
+      "goals": [ g.pack() for g in self.goals.values() ],
+      "priorities": self.priorities
+    }
+
+  def unpack(obj):
+    """
+    Inverse of `pack`; creates an instance from a simple object.
+    """
     return ModeOfEngagement(
       obj["name"],
-      obj["goals"],
+      [ PlayerGoal.unpack(g) for g in obj["goals"] ],
       obj["priorities"]
     )
 
@@ -302,7 +299,7 @@ class ModeOfEngagement:
 
             # add the appropriate percept
             result[g].append(
-              perception.Prospective(
+              Prospective(
                 goal=g,
                 choice=choice,
                 option=option,

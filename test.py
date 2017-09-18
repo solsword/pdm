@@ -36,45 +36,53 @@ def test_types():
 
   return True
 
-def mktest_json(cls):
+def mktest_packable(cls):
   @test
-  def test_json():
-    fj = cls.from_json
-    test_stuff = fj.__doc__.split("```")
+  def test_packable():
+    test_stuff = cls.pack.__doc__.split("```")
 
-    tin = utils.dedent(test_stuff[1])
-    tcmp = utils.dedent(test_stuff[2])
+    tinst = eval(utils.dedent(test_stuff[1]))
+    tobj = eval(utils.dedent(test_stuff[2]))
 
-    o = cls.from_json(tin)
-    oalt = eval(tcmp)
-    jrec = o.json(indent=2)
-    orec = cls.from_json(jrec)
+    uinst = cls.unpack(tobj)
+    pobj = tinst.pack()
+    urec = cls.unpack(pobj)
+    prec = uinst.pack()
 
-    assert o == oalt, (
-      "Object from JSON doesn't match eval'd version:\n```\n{}\n```\n{}\n```"
-      .format(repr(o), repr(oalt))
+    assert tinst == uinst, (
+      "Unpacked object doesn't match eval'd version:\n```\n{}\n```\n{}\n```"
+      .format(repr(tinst), repr(uinst))
     )
 
-    assert "\n" + jrec + "\n" == tin, (
-      "JSON doesn't match reproduced JSON:\n```\n{}\n```\n{}\n```".format(
-        "\n" + jrec + "\n",
-        tin
+    assert pobj == tobj, (
+      "Packed object doesn't match given:\n```\n{}\n```\n{}\n```".format(
+        str(tobj),
+        str(pobj)
       )
     )
-    assert o == orec, (
-      "Object from JSON doesn't match reconstruction:\n```\n{}\n```\n{}\n```"
+    assert tinst == urec, (
+      "Pack/unpacked object doesn't match:\n```\n{}\n```\n{}\n```"
       .format(
-        repr(o),
-        repr(orec)
+        repr(tinst),
+        repr(urec)
+      )
+    )
+    assert tobj == prec, (
+      "Unpack/packed object doesn't match:\n```\n{}\n```\n{}\n```"
+      .format(
+        repr(tobj),
+        repr(prec)
       )
     )
 
     return True
 
-  test_json.__name__ = "test_" + cls.__name__.lower() + "_json"
+  test_packable.__name__ = "test_" + cls.__name__.lower() + "_packing"
 
-mktest_json(Choice)
-mktest_json(ModeOfEngagement)
+mktest_packable(Outcome)
+mktest_packable(Option)
+mktest_packable(Choice)
+mktest_packable(ModeOfEngagement)
 
 def main():
   for t in all_tests:
