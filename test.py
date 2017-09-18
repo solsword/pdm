@@ -14,6 +14,7 @@ from choice import Choice, Option, Outcome
 from engagement import PriorityMethod, ModeOfEngagement
 from player import PlayerModel
 from decision import DecisionMethod, Decision
+from perception import Percept, Prospective, Retrospective
 
 all_tests = []
 def test(f):
@@ -51,7 +52,7 @@ def mktest_packable(cls):
 
     assert tinst == uinst, (
       "Unpacked object doesn't match eval'd version:\n```\n{}\n```\n{}\n```"
-      .format(repr(tinst), repr(uinst))
+      .format(str(tinst), str(uinst))
     )
 
     assert pobj == tobj, (
@@ -61,17 +62,15 @@ def mktest_packable(cls):
       )
     )
     assert tinst == urec, (
-      "Pack/unpacked object doesn't match:\n```\n{}\n```\n{}\n```"
-      .format(
-        repr(tinst),
-        repr(urec)
+      "Pack/unpacked object doesn't match:\n```\n{}\n```\n{}\n```".format(
+        str(tinst),
+        str(urec)
       )
     )
     assert tobj == prec, (
-      "Unpack/packed object doesn't match:\n```\n{}\n```\n{}\n```"
-      .format(
-        repr(tobj),
-        repr(prec)
+      "Unpack/packed object doesn't match:\n```\n{}\n```\n{}\n```".format(
+        str(tobj),
+        str(prec)
       )
     )
 
@@ -79,10 +78,13 @@ def mktest_packable(cls):
 
   test_packable.__name__ = "test_" + cls.__name__.lower() + "_packing"
 
-mktest_packable(Outcome)
-mktest_packable(Option)
-mktest_packable(Choice)
-mktest_packable(ModeOfEngagement)
+for cls in [
+  Outcome, Option, Choice,
+  ModeOfEngagement,
+  Percept, Prospective, Retrospective,
+  DecisionMethod, Decision,
+]:
+  mktest_packable(cls)
 
 def main():
   for t in all_tests:

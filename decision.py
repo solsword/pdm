@@ -12,6 +12,8 @@ import utils
 import perception
 import choice
 
+from base_types import Certainty, Valence, Salience
+
 class DecisionMethod:
   """
   Decision modes reflect general strategies for making decisions based on
@@ -36,6 +38,34 @@ class DecisionMethod:
 
   def __hash__(self):
     return hash(type(self)) + 7 * hash(self.name)
+
+  def pack(self):
+    """
+    Turns this object into a simple object that can be converted to JSON.
+
+    Example:
+
+    ```
+    DecisionMethod.maximizing
+    ```
+    "maximizing"
+    ```
+    """
+    return self.name
+
+  def unpack(obj):
+    """
+    The inverse of `pack`; creates a DecisionMethod from a simple object. This
+    method works for all of the various subclasses.
+    """
+    if hasattr(DecisionMethod, obj):
+      result = getattr(DecisionMethod, obj)
+      if isinstance(result, DecisionMethod):
+        return result
+
+    raise ValueError(
+      "Attempted to unpack unknown decision method '{}'.".format(obj)
+    )
 
   def decide(self, decision):
     """
@@ -197,18 +227,48 @@ class Decision:
     self,
     choice,
     option=None,
-    outcomes=None
+    outcomes=None,
+    prospective_impressions=None,
+    factored_decision_models=None,
+    goal_relevance=None,
+    retrospective_impressions=None
   ):
     """
     choice:
       The choice that this object focuses on.
     option:
       The option the choosing of which this Decision represents. May be left
-      blank at first.
+      blank at first by passing in None.
     outcomes:
       A collection of Outcome objects; leave out to create a pre-outcome
       decision. The special string "generate" can be used to automatically
-      generate outcomes; it just has the effect of calling roll_outcomes.
+      generate outcomes; it just has the effect of calling roll_outcomes. Note
+      that "generate" may not be given when no option is specified (doing so
+      will result in a RuntimeError).
+    prospective_impressions:
+      A mapping from option names to mappings from goal names to prospective
+      impression lists, as returned by ModeOfEngagement.build_decision_model.
+      Can be created automatically along with the factored_decision_models and
+      goal_relevance properties if given as None using the
+      add_prospective_impressions method.
+    factored_decision_models:
+      This is just a list of one or more prospective impressions structures
+      (maps from option names to maps from goal names to impression lists).
+      The models are arranged such that the first model can be used to make
+      decisions, falling back to successive models in the case of a tie at an
+      upper level. Normally, this is given as None and assigned when
+      add_prospective_impressions is called.
+    goal_relevance:
+      A mapping from goal names to Salience values. This expresses the relative
+      importance of various goals at the moment of the decision, and is usually
+      given as None and assigned when add_prospective_impressions is called.
+    retrospective_impressions:
+      A mapping from goal names to lists of Retrospective impression objects.
+      Normally given as None and then assigned using the
+      add_retrospective_impressions method. Note that each goal may have
+      multiple associated impressions based on the various outcomes that
+      occurred. This only makes sense if the option for this Decision has been
+      chosen and outcomes have been rolled (see roll_outcomes).
     """
     self.choice = choice
 
@@ -229,11 +289,14 @@ class Decision:
           for o in self.outcomes
       }
 
-    self.prospective_impressions = None
-    self.factored_decision_models = None
-    self.goal_relevance = None
-    self.retrospective_impressions = None
-    self.simplified_retrospectives = None
+    self.prospective_impressions = prospective_impressions
+    self.factored_decision_models = factored_decision_models
+    self.goal_relevance = goal_relevance
+    self.retrospective_impressions = retrospective_impressions
+    if retrospective_impressions:
+      self.add_simplified_retrospectives()
+    else:
+      self.simplified_retrospectives = None
 
   def __eq__(self, other):
     if not isinstance(other, Decision):
@@ -308,6 +371,180 @@ class Decision:
 
     return h
 
+  def pack(self):
+    """
+    Packs this Decision into a simple object representation which can be
+    converted to JSON.
+
+    Example:
+
+    ```
+    Decision(
+      Choice(
+        "Rescue the baby dragon or not?", 
+        [
+          Option(
+            "rescue_it",
+            [
+              Outcome(
+                "bites_your_hand",
+                {
+                  "health_and_safety": Valence("unsatisfactory"),
+                  "befriend_dragon": Valence("unsatisfactory"),
+                },
+                Salience("implicit"),
+                Certainty("even"),
+              ),
+              Outcome(
+                "appreciates_kindness",
+                { "befriend_dragon": "good" },
+                "explicit",
+                "likely",
+              )
+            ]
+          ),
+          Option(
+            "leave_it",
+            [
+              Outcome(
+                "dislikes_abandonment",
+                { "befriend_dragon": "bad" },
+                "explicit",
+                0.97,
+              ),
+              Outcome(
+                "dies",
+                {
+                  "befriend_dragon": "awful",
+                  "kill_dragon": "great"
+                },
+                "hinted",
+                "unlikely",
+                actual_likelihood="even"
+              )
+            ]
+          )
+        ]
+      ),
+      Option(
+        "rescue_it",
+        [
+          Outcome(
+            "bites_your_hand",
+            {
+              "health_and_safety": Valence("unsatisfactory"),
+              "befriend_dragon": Valence("unsatisfactory"),
+            },
+            Salience("implicit"),
+            Certainty("even"),
+          ),
+          Outcome(
+            "appreciates_kindness",
+            { "befriend_dragon": "good" },
+            "explicit",
+            "likely",
+          )
+        ]
+      ),
+      [
+        Outcome(
+          "appreciates_kindness",
+          { "befriend_dragon": "good" },
+          "explicit",
+          "likely",
+        )
+      ],
+      prospective_impressions=None,
+      factored_decision_models=None,
+      goal_relevance=None,
+      retrospective_impressions=None
+    )
+    ```
+    {
+      "choice": {
+        "name": "Rescue the baby dragon or not?",
+        "options": {
+          "leave_it": {
+            "name": "leave_it",
+            "outcomes": [
+              {
+                "actual_likelihood": "even",
+                "apparent_likelihood": "unlikely",
+                "effects": {
+                  "befriend_dragon": "awful",
+                  "kill_dragon": "great"
+                },
+                "name": "dies",
+                "salience": "hinted"
+              },
+              {
+                "apparent_likelihood": 0.97,
+                "effects": {
+                  "befriend_dragon": "bad"
+                },
+                "name": "dislikes_abandonment",
+                "salience": "explicit"
+              },
+            ]
+          },
+          "rescue_it": {
+            "name": "rescue_it",
+            "outcomes": [
+              {
+                "apparent_likelihood": "likely",
+                "effects": {
+                  "befriend_dragon": "good"
+                },
+                "name": "appreciates_kindness",
+                "salience": "explicit"
+              },
+              {
+                "apparent_likelihood": "even",
+                "effects": {
+                  "befriend_dragon": "unsatisfactory",
+                  "health_and_safety": "unsatisfactory"
+                },
+                "name": "bites_your_hand",
+                "salience": "implicit"
+              }
+            ]
+          }
+        }
+      },
+      "option": {
+        "name": "rescue_it",
+        "outcomes": [
+          {
+            "apparent_likelihood": "likely",
+            "effects": {
+              "befriend_dragon": "good"
+            },
+            "name": "appreciates_kindness",
+            "salience": "explicit"
+          },
+          {
+            "apparent_likelihood": "even",
+            "effects": {
+              "befriend_dragon": "unsatisfactory",
+              "health_and_safety": "unsatisfactory"
+            },
+            "name": "bites_your_hand",
+            "salience": "implicit"
+          }
+        ]
+      },
+      "outcomes": [
+        TODO: HERE
+      ]
+    }
+    self.prospective_impressions = None
+    self.factored_decision_models = None
+    self.goal_relevance = None
+    self.retrospective_impressions = None
+    self.simplified_retrospectives = None
+    ```
+    """
+
   def select_option(self, selection):
     """
     Selects a particular option at this choice, either via a string key or the
@@ -336,7 +573,7 @@ class Decision:
     """
     Uses the actual_likelihood information from the Outcome objects included in
     this decision's Option to sample a set of Outcomes and assigns those to
-    self.outcomes.
+    self.outcomes. Will raise a RuntimeError if an option hasn't been chosen.
     """
     if not self.option:
       raise RuntimeError(
@@ -405,6 +642,7 @@ class Decision:
                 goal=goal,
                 choice=self.choice.name,
                 option=self.option.name,
+                outcome=out.name,
                 prospective=pri,
                 salience=1.0, # TODO: retrospective saliences would hook in here
                 valence=val
@@ -412,6 +650,20 @@ class Decision:
             )
 
     # Also create bundled simplified retrospective impressions
+    self.add_simplified_retrospectives()
+
+  def add_simplified_retrospectives(self):
+    """
+    Fills in simplified retrospective impressions from full retrospectives.
+    Normally it's not necessary to call this manually, and it's an error to
+    call it if simplified retrospectives have already been added.
+    """
+    if self.simplified_retrospectives:
+      raise RuntimeError(
+        "Attempted to add simplified retrospectives to a decision which "
+        "already had them."
+      )
+
     self.simplified_retrospectives = {}
     for goal in self.retrospective_impressions:
       ilist = self.retrospective_impressions[goal]
