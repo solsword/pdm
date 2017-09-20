@@ -6,6 +6,8 @@ Code for modelling option and outcome perceptions.
 
 from base_types import Certainty, Valence, Salience
 
+from packable import pack, unpack
+
 class Percept:
   """
   Base class for all percepts, modelling general player perceptions of options
@@ -42,8 +44,8 @@ class Percept:
     """
     self.goal = goal
     self.choice = choice
-    self.option = option if option != "" else None
-    self.outcome = outcome if outcome != "" else None
+    self.option = option
+    self.outcome = outcome
     if self.outcome and not self.option:
       raise ValueError(
         "Can't specify an outcome without specifying an option.\n"
@@ -56,7 +58,7 @@ class Percept:
     self.salience = Salience(salience)
 
   def __str__(self):
-    return str(self.pack())
+    return str(pack(self))
 
   def __eq__(self, other):
     if not isinstance(other, Percept):
@@ -79,7 +81,7 @@ class Percept:
     h ^= hash(self.salience)
     return h
 
-  def pack(self):
+  def _pack_(self):
     """
     Returns a simple object suitable for conversion to JSON.
 
@@ -100,7 +102,7 @@ class Percept:
       "goal": "avoid_conflict",
       "choice": "run_or_fight",
       "option": "run",
-      "outcome": "",
+      "outcome": None,
       "valence": 0.8,
       "salience": "explicit"
     }
@@ -110,16 +112,17 @@ class Percept:
       "type": "Percept",
       "goal": self.goal,
       "choice": self.choice,
-      "option": self.option or "",
-      "outcome": self.outcome or "",
-      "valence": self.valence.regular_form(),
-      "salience": self.salience.regular_form()
+      "option": self.option,
+      "outcome": self.outcome,
+      "valence": pack(self.valence),
+      "salience": pack(self.salience)
     }
 
-  def unpack(obj):
+  def _unpack_(obj):
     """
-    The inverse of `pack`; creates a Percept from a simple object. This method
-    handles unpacking for subtypes Prospective and Retrospective as well.
+    The inverse of `_pack_`; creates a Percept from a simple object. This
+    method handles unpacking for subtypes Prospective and Retrospective as
+    well.
     """
     if obj["type"] == "Percept":
       return Percept(
@@ -127,8 +130,8 @@ class Percept:
         obj["choice"],
         obj["option"],
         obj["outcome"],
-        Valence(obj["valence"]),
-        Salience(obj["salience"]),
+        unpack(obj["valence"], Valence),
+        unpack(obj["salience"], Salience),
       )
     elif obj["type"] == "Prospective":
       return Prospective(
@@ -136,9 +139,9 @@ class Percept:
         obj["choice"],
         obj["option"],
         obj["outcome"],
-        Valence(obj["valence"]),
-        Salience(obj["salience"]),
-        certainty=Certainty(obj["certainty"])
+        unpack(obj["valence"], Valence),
+        unpack(obj["salience"], Salience),
+        certainty=unpack(obj["certainty"], Certainty)
       )
     elif obj["type"] == "Retrospective":
       return Retrospective(
@@ -146,9 +149,9 @@ class Percept:
         obj["choice"],
         obj["option"],
         obj["outcome"],
-        Valence(obj["valence"]),
-        Salience(obj["salience"]),
-        prospective=Prospective.unpack(obj["prospective"])
+        unpack(obj["valence"], Valence),
+        unpack(obj["salience"], Salience),
+        prospective=unpack(obj["prospective"], Prospective)
       )
 
   def utility(self):
@@ -186,14 +189,14 @@ class Prospective(Percept):
     )
 
   def __str__(self):
-    return str(self.pack())
+    return str(pack(self))
 
   def __hash__(self):
     h = super().__hash__()
     h ^= 3 * hash(self.certainty)
     return h
 
-  def pack(self):
+  def _pack_(self):
     """
     Packs into a simple object; suitable for conversion to JSON.
 
@@ -222,9 +225,9 @@ class Prospective(Percept):
     }
     ```
     """
-    result = super().pack()
+    result = super()._pack_()
     result["type"] = "Prospective"
-    result["certainty"] = self.certainty.regular_form()
+    result["certainty"] = pack(self.certainty)
     return result
 
   # unpacking handled by Percept.unpack
@@ -342,7 +345,7 @@ class Retrospective(Percept):
       )
 
   def __str__(self):
-    return str(self.pack())
+    return str(pack(self))
 
   def __eq__(self, other):
     if not isinstance(other, Retrospective):
@@ -357,7 +360,7 @@ class Retrospective(Percept):
     h += 5 * hash(self.prospective)
     return h
 
-  def pack(self):
+  def _pack_(self):
     """
     Packs into a simple object; suitable for conversion to JSON.
 
@@ -397,9 +400,9 @@ class Retrospective(Percept):
     }
     ```
     """
-    result = super().pack()
+    result = super()._pack_()
     result["type"] = "Retrospective"
-    result["prospective"] = self.prospective.pack()
+    result["prospective"] = pack(self.prospective)
     return result
 
   # unpacking handled by Percept.unpack

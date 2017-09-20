@@ -8,9 +8,10 @@ import random
 
 import utils
 
-from base_types import Certainty
-from base_types import Valence
-from base_types import Salience
+from packable import pack, unpack
+from diffable import diff
+
+from base_types import Certainty, Valence, Salience
 
 class Outcome:
   """
@@ -65,7 +66,38 @@ class Outcome:
 
   def __str__(self):
     # TODO: Better here
-    return str(self.pack())
+    return str(pack(self))
+
+  def _diff_(self, other):
+    """
+    Reports differences (see diffable.py).
+    """
+    differences = []
+    if self.name != other.name:
+      differences.append("names: '{}' != '{}'".format(self.name, other.name))
+    if self.salience != other.salience:
+      differences.append(
+        "salience: {} != {}".format(self.salience, other.salience)
+      )
+    if self.apparent_likelihood != other.apparent_likelihood:
+      differences.append(
+        "apparent_likelihood: {} != {}".format(
+          self.apparent_likelihood,
+          other.apparent_likelihood
+        )
+      )
+    if self.actual_likelihood != other.actual_likelihood:
+      differences.append(
+        "actual_likelihood: {} != {}".format(
+          self.actual_likelihood,
+          other.actual_likelihood
+        )
+      )
+    differences.extend([
+      "goal_effects: {}".format(d)
+        for d in diff(self.goal_effects, other.goal_effects)
+    ])
+    return differences
 
   def __eq__(self, other):
     if not isinstance(other, Outcome):
@@ -96,7 +128,7 @@ class Outcome:
 
     return h
 
-  def pack(self):
+  def _pack_(self):
     """
     Returns a simple representation of this option suitable for direct
     conversion to JSON.
@@ -127,36 +159,37 @@ class Outcome:
     if self.apparent_likelihood == self.actual_likelihood:
       return {
         "name": self.name,
-        "salience": self.salience.regular_form(),
-        "apparent_likelihood": self.apparent_likelihood.regular_form(),
+        "salience": pack(self.salience),
+        "apparent_likelihood": pack(self.apparent_likelihood),
         "effects": {
-          g: self.goal_effects[g].regular_form()
+          g: pack(self.goal_effects[g])
             for g in self.goal_effects
         }
       }
     else:
       return {
         "name": self.name,
-        "salience": self.salience.regular_form(),
-        "apparent_likelihood": self.apparent_likelihood.regular_form(),
-        "actual_likelihood": self.actual_likelihood.regular_form(),
+        "salience": pack(self.salience),
+        "apparent_likelihood": pack(self.apparent_likelihood),
+        "actual_likelihood": pack(self.actual_likelihood),
         "effects": {
-          g: self.goal_effects[g].regular_form()
+          g: pack(self.goal_effects[g])
             for g in self.goal_effects
         }
       }
 
-  def unpack(obj):
+  def _unpack_(obj):
     """
-    The inverse of `pack`; constructs an instance from a simple object (e.g.,
+    The inverse of `_pack_`; constructs an instance from a simple object (e.g.,
     one produced by json.loads).
     """
     return Outcome(
       obj["name"],
       obj["effects"],
-      obj["salience"],
-      obj["apparent_likelihood"],
-      obj["actual_likelihood"] if "actual_likelihood" in obj else None
+      unpack(obj["salience"], Salience),
+      unpack(obj["apparent_likelihood"], Certainty),
+      unpack(obj["actual_likelihood"], Certainty) \
+        if "actual_likelihood" in obj else None
     )
 
 class Option:
@@ -187,7 +220,20 @@ class Option:
 
   def __str__(self):
     # TODO: Better here?
-    return str(self.pack())
+    return str(pack(self))
+
+  def _diff_(self, other):
+    """
+    Reports differences (see diffable.py).
+    """
+    differences = []
+    if self.name != other.name:
+      differences.append("names: '{}' != '{}'".format(self.name, other.name))
+    differences.extend(
+      "outcomes: {}".format(d)
+        for d in diff(self.outcomes, other.outcomes)
+    )
+    return differences
 
   def __eq__(self, other):
     if not isinstance(other, Option):
@@ -209,7 +255,7 @@ class Option:
     return h
 
 
-  def pack(self, indent=None):
+  def _pack_(self):
     """
     Returns a simple representation of this option suitable for direct
     conversion to JSON.
@@ -261,24 +307,22 @@ class Option:
     }
     ```
     """
-    outcomes = [
-      self.outcomes[k].pack()
-        for k in sorted(list(self.outcomes.keys()))
-    ]
     return {
       "name": self.name,
-      "outcomes": outcomes
+      "outcomes": [
+        pack(self.outcomes[k])
+          for k in sorted(list(self.outcomes.keys()))
+      ]
     }
 
-  def unpack(obj):
+  def _unpack_(obj):
     """
-    The inverse of `pack`; takes a simple object (e.g., from json.loads) and
+    The inverse of `_pack_`; takes a simple object (e.g., from json.loads) and
     returns an Option instance.
     """
-    outcomes = [ Outcome.unpack(o) for o in obj["outcomes"] ]
     return Option(
       obj["name"],
-      outcomes
+      [ unpack(o, Outcome) for o in obj["outcomes"] ]
     )
 
   def add_outcome(self, outcome):
@@ -357,7 +401,20 @@ class Choice:
 
   def __str__(self):
     # TODO: Better here
-    return str(self.pack())
+    return str(pack(self))
+
+  def _diff_(self, other):
+    """
+    Reports differences (see diffable.py).
+    """
+    differences = []
+    if self.name != other.name:
+      differences.append("names: '{}' != '{}'".format(self.name, other.name))
+    differences.extend(
+      "options: {}".format(d)
+        for d in diff(self.options, other.options)
+    )
+    return differences
 
   def __eq__(self, other):
     if not isinstance(other, Choice):
@@ -393,7 +450,7 @@ class Choice:
 
     self.options[option.name] = option
 
-  def pack(self):
+  def _pack_(self):
     """
     Returns a simple representation of this choice, suitable for direct
     conversion to JSON.
@@ -503,20 +560,18 @@ class Choice:
     """
     return {
       "name": self.name,
-      "options": {
-        k: self.options[k].pack()
-          for k in self.options
-      }
+      "options": pack(self.options)
     }
 
-  def unpack(obj):
+  def _unpack_(obj):
     """
-    The inverse of `pack`; takes a simple object and returns a Choice instance.
+    The inverse of `_pack_`; takes a simple object and returns a Choice
+    instance.
     """
     opts = obj["options"]
     return Choice(
       obj["name"],
-      [ Option.unpack(opts[k]) for k in opts ]
+      [ unpack(opts[k], Option) for k in opts ]
     )
 
   def remove_option(self, option_name):

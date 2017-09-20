@@ -9,6 +9,9 @@ import traceback
 
 import utils
 
+from packable import pack, unpack
+from diffable import diff
+
 from base_types import Certainty, Valence, Salience
 from choice import Choice, Option, Outcome
 from engagement import PriorityMethod, ModeOfEngagement
@@ -33,44 +36,58 @@ def test_types():
   assert type(c + 0.1) == Certainty
 
   assert str(c) == "Certainty(0.0)"
-  assert c.regular_form() == "impossible"
+  assert pack(c) == "impossible"
 
   return True
 
 def mktest_packable(cls):
   @test
   def test_packable():
-    test_stuff = cls.pack.__doc__.split("```")
+    test_stuff = cls._pack_.__doc__.split("```")
 
     tinst = eval(utils.dedent(test_stuff[1]))
     tobj = eval(utils.dedent(test_stuff[2]))
 
-    uinst = cls.unpack(tobj)
-    pobj = tinst.pack()
-    urec = cls.unpack(pobj)
-    prec = uinst.pack()
+    uinst = unpack(tobj, cls)
+    pobj = pack(tinst)
+    urec = unpack(pobj, cls)
+    prec = pack(uinst)
 
     assert tinst == uinst, (
-      "Unpacked object doesn't match eval'd version:\n```\n{}\n```\n{}\n```"
-      .format(str(tinst), str(uinst))
+      (
+        "Unpacked object doesn't match eval'd version:\n```\n{}\n```\n{}\n```"
+        "\nDifferences:\n  {}"
+      ).format(str(tinst), str(uinst), "\n  ".join(diff(tinst, uinst)))
     )
 
     assert pobj == tobj, (
-      "Packed object doesn't match given:\n```\n{}\n```\n{}\n```".format(
+      (
+        "Packed object doesn't match given:\n```\n{}\n```\n{}\n```"
+        "\nDifferences:\n  {}"
+      ).format(
         str(tobj),
-        str(pobj)
+        str(pobj),
+        "\n  ".join(diff(tobj, pobj))
       )
     )
     assert tinst == urec, (
-      "Pack/unpacked object doesn't match:\n```\n{}\n```\n{}\n```".format(
+      (
+        "Pack/unpacked object doesn't match:\n```\n{}\n```\n{}\n```"
+        "\nDifferences:\n  {}"
+      ).format(
         str(tinst),
-        str(urec)
+        str(urec),
+        "\n  ".join(diff(tinst, urec))
       )
     )
     assert tobj == prec, (
-      "Unpack/packed object doesn't match:\n```\n{}\n```\n{}\n```".format(
+      (
+        "Unpack/packed object doesn't match:\n```\n{}\n```\n{}\n```"
+        "\nDifferences:\n  {}"
+      ).format(
         str(tobj),
-        str(prec)
+        str(prec),
+        "\n  ".join(diff(tobj, prec))
       )
     )
 

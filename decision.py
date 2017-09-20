@@ -9,6 +9,9 @@ import random
 
 import utils
 
+from packable import pack, unpack
+from diffable import diff
+
 import perception
 import choice
 
@@ -29,6 +32,20 @@ class DecisionMethod:
 
     return result
 
+  def _diff_(self, other):
+    """
+    Reports differences (see diffable.py).
+    """
+    differences = []
+    if not isinstance(other, type(self)):
+      differences.append(
+        "exact types: {} != {}".format(type(self), type(other))
+      )
+    if self.name != other.name:
+      differences.append("names: '{}' != '{}'".format(self.name, other.name))
+
+    return differences
+
   def __eq__(self, other):
     if not isinstance(other, type(self)):
       return False
@@ -39,7 +56,7 @@ class DecisionMethod:
   def __hash__(self):
     return hash(type(self)) + 7 * hash(self.name)
 
-  def pack(self):
+  def _pack_(self):
     """
     Turns this object into a simple object that can be converted to JSON.
 
@@ -53,12 +70,12 @@ class DecisionMethod:
     """
     return self.name
 
-  def unpack(obj):
+  def _unpack_(obj):
     """
     The inverse of `pack`; creates a DecisionMethod from a simple object. This
     method works for all of the various subclasses.
     """
-    if hasattr(DecisionMethod, obj):
+    if isinstance(obj, str) and hasattr(DecisionMethod, obj):
       result = getattr(DecisionMethod, obj)
       if isinstance(result, DecisionMethod):
         return result
@@ -95,7 +112,7 @@ class Maximizing(DecisionMethod):
   arbitrarily.
   """
   def __new__(cls):
-    super().__new__(cls, "maximizing")
+    return super().__new__(cls, "maximizing")
 
   def decide(self, decision):
     """
@@ -123,7 +140,7 @@ class Satisficing(DecisionMethod):
   acceptable, and an arbitrary decision is made between acceptable options.
   """
   def __new__(cls):
-    super().__new__(cls, "satisficing")
+    return super().__new__(cls, "satisficing")
 
   def decide(self, decision):
     """
@@ -153,7 +170,7 @@ class Utilizing(DecisionMethod):
   not at all accurate.
   """
   def __new__(cls):
-    super().__new__(cls, "utilizing")
+    return super().__new__(cls, "utilizing")
 
   def decide(self, decision):
     """
@@ -193,7 +210,7 @@ class Randomizing(DecisionMethod):
   random.
   """
   def __new__(cls):
-    super().__new__(cls, "randomizing")
+    return super().__new__(cls, "randomizing")
 
   def decide(self, decision):
     """
@@ -298,6 +315,52 @@ class Decision:
     else:
       self.simplified_retrospectives = None
 
+  def __str__(self):
+    # TODO: Better here
+    return str(pack(self))
+
+  def _diff_(self, other):
+    """
+    Reports differences (see diffable.py).
+    """
+    return [
+      "choices: {}".format(d)
+        for d in diff(self.choice, other.choice)
+    ] + [
+      "options: {}".format(d)
+        for d in diff(self.option, other.option)
+    ] + [
+      "outcomes: {}".format(d)
+        for d in diff(self.outcomes, other.outcomes)
+    ] + [
+      "prospectives: {}".format(d)
+        for d in diff(
+          self.prospective_impressions,
+          other.prospective_impressions
+        )
+    ] + [
+      "factored decision models: {}".format(d)
+        for d in diff(
+          self.factored_decision_models,
+          other.factored_decision_models
+        )
+    ] + [
+      "goal relevance: {}".format(d)
+        for d in diff(self.goal_relevance, other.goal_relevance)
+    ] + [
+      "retrospectives: {}".format(d)
+        for d in diff(
+          self.retrospective_impressions,
+          other.retrospective_impressions
+        )
+    ] + [
+      "simplified retrospectives: {}".format(d)
+        for d in diff(
+          self.simplified_retrospectives,
+          other.simplified_retrospectives
+        )
+    ]
+
   def __eq__(self, other):
     if not isinstance(other, Decision):
       return False
@@ -317,6 +380,7 @@ class Decision:
       return False
     if other.simplified_retrospectives != self.simplified_retrospectives:
       return False
+    return True
 
   def __hash__(self):
     h = hash(self.choice)
@@ -371,7 +435,7 @@ class Decision:
 
     return h
 
-  def pack(self):
+  def _pack_(self):
     """
     Packs this Decision into a simple object representation which can be
     converted to JSON.
@@ -534,16 +598,82 @@ class Decision:
         ]
       },
       "outcomes": [
-        TODO: HERE
-      ]
+        {
+          "apparent_likelihood": "likely",
+          "effects": {
+            "befriend_dragon": "good"
+          },
+          "name": "appreciates_kindness",
+          "salience": "explicit"
+        }
+      ],
+      "prospective_impressions": None,
+      "factored_decision_models": None,
+      "goal_relevance": None,
+      "retrospective_impressions": None,
     }
-    self.prospective_impressions = None
-    self.factored_decision_models = None
-    self.goal_relevance = None
-    self.retrospective_impressions = None
-    self.simplified_retrospectives = None
     ```
+    TODO: More examples!
     """
+    return {
+      "choice": pack(self.choice),
+      "option": pack(self.option),
+      "outcomes": [ pack(o) for o in self.outcomes.values() ],
+      "prospective_impressions": pack(self.prospective_impressions),
+      "factored_decision_models": pack(self.factored_decision_models),
+      "goal_relevance": pack(self.goal_relevance),
+      "retrospective_impressions": pack(self.retrospective_impressions),
+      # Note: no need to pack simplified retrospective impressions, as they'll
+      # be reconstructed from the full retrospectives.
+    }
+
+  def unpack_decision_model(dm):
+    """
+    Helper method for _unpack_ that unpacks a decision model (a mapping from
+    option names to mappings from goal names to lists of Prospective
+    impressions).
+    """
+    return {
+      optname: {
+        goalname: [
+          unpack(pri, perception.Prospective)
+            for pri in dm[optname][goalname]
+        ]
+          for goalname in dm[optname]
+      }
+        for optname in dm
+    } if dm else None
+
+  def _unpack_(obj):
+    """
+    The inverse of `_pack_`; creates a Decision from a simple object.
+
+    Note that the choice, option, and outcomes of this decision are new,
+    disentangled objects, so this it isn't terribly memory efficient to pack
+    and unpack Decision objects, and true linkage shouldn't be assumed.
+    """
+    return Decision(
+      unpack(obj["choice"], choice.Choice),
+      unpack(obj["option"], choice.Option),
+      [ unpack(o, choice.Outcome) for o in obj["outcomes"] ],
+      Decision.unpack_decision_model(obj["prospective_impressions"]),
+      [
+        Decision.unpack_decision_model(dm)
+          for dm in obj["factored_decision_models"]
+      ] if obj["factored_decision_models"] else None,
+      {
+        gn: unpack(obj["goal_relevance"][gn], Salience)
+          for gn in obj["goal_relevance"]
+      } if obj["goal_relevance"] else None,
+      {
+        gn: [
+          unpack(o, perception.Retrospective)
+            for o in obj["retrospective_impressions"][gn]
+        ]
+          for gn in obj["retrospective_impressions"]
+      } if obj["retrospective_impressions"] else None
+    )
+
 
   def select_option(self, selection):
     """

@@ -99,7 +99,8 @@ def super_class_property(*args, **kwargs):
         ).format(cls)
       )
     parent = mro[1]
-    setattr(parent, cls.__name__.lower(), cls(*args, **kwargs))
+    instance = cls(*args, **kwargs)
+    setattr(parent, cls.__name__.lower(), instance)
     return cls
 
   return add_superclass_property

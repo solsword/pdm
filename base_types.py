@@ -139,15 +139,20 @@ def abstractable(cls):
 
     return cls(found)
 
-  def regular_form(self):
+  def _pack_(self):
     for (n, r) in type(self)._ranges:
       if self == r.val:
         return n
     return self
 
+  @classmethod
+  def _unpack_(cls, obj):
+    return cls(obj)
+
   cls.validate = validate
   cls.abstract = abstract
-  cls.regular_form = regular_form
+  cls._pack_ = _pack_
+  cls._unpack_ = _unpack_
   return cls
 
 

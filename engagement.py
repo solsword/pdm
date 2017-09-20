@@ -18,6 +18,8 @@ DEFAULT_PRIORITY:
 
 import utils
 
+from packable import pack, unpack
+
 from perception import Prospective
 from goals import PlayerGoal
 
@@ -158,7 +160,7 @@ class ModeOfEngagement:
 
     return h
 
-  def pack(self):
+  def _pack_(self):
     """
     Returns a simple representation of this object, suitable for conversion to
     JSON.
@@ -190,17 +192,17 @@ class ModeOfEngagement:
     """
     return {
       "name": self.name,
-      "goals": [ g.pack() for g in self.goals.values() ],
+      "goals": [ pack(g) for g in self.goals.values() ],
       "priorities": self.priorities
     }
 
-  def unpack(obj):
+  def _unpack_(obj):
     """
-    Inverse of `pack`; creates an instance from a simple object.
+    Inverse of `_pack_`; creates an instance from a simple object.
     """
     return ModeOfEngagement(
       obj["name"],
-      [ PlayerGoal.unpack(g) for g in obj["goals"] ],
+      [ unpack(g, PlayerGoal) for g in obj["goals"] ],
       obj["priorities"]
     )
 
