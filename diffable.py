@@ -17,7 +17,7 @@ def diff(a, b):
   if a == b:
     return []
   elif isinstance(a, type(b)) or isinstance(b, type(a)):
-    if type(a) == type(b):
+    if type(a) == type(b) and hasattr(a, "_diff_") or hasattr(b, "_diff"):
       if hasattr(a, "_diff_"):
         return a._diff_(b)
       elif hasattr(b, "_diff_"):
@@ -36,17 +36,17 @@ def diff(a, b):
         if len(a) != len(b):
           differences.append("lengths: {} != {}".format(len(a), len(b)))
         for i in range(min(len(a), len(b))):
-          d = diff(a[i], b[i])
-          if d:
-            differences.append("at [{}]: {}".format(i, d))
+          dl = diff(a[i], b[i])
+          if dl:
+            differences.extend("at [{}]: {}".format(i, d) for d in dl)
       elif isinstance(a, dict):
         for k in a:
           if k not in b:
             differences.append("extra key in A: '{}'".format(k))
           else:
-            d = diff(a[k], b[k])
-            if d:
-              differences.append("at [{}]: {}".format(k, d))
+            dl = diff(a[k], b[k])
+            if dl:
+              differences.extend("at [{}]: {}".format(k, d) for d in dl)
         for k in b:
           if k not in a:
             differences.append("extra key in B: '{}'".format(k))
@@ -54,6 +54,11 @@ def diff(a, b):
         return [ "values: {} != {}".format(a, b) ]
       else:
         return [ "unknown" ]
+
       return differences or [ "unknown" ]
+
+    return "two"
   else:
     return [ "types: {} != {}".format(type(a), type(b)) ]
+
+  return "three"
