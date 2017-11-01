@@ -103,6 +103,22 @@ class DecisionMethod:
       "DecisionMethod itself!"
     )
 
+  def consistency(self, decision):
+    """
+    Overridden by subclasses to implement consistency logic.
+
+    Takes a Decision object that's already been decided, and returns a number
+    between 0 and 1 indicating how consistent the decision is with this
+    decision method.
+
+    The given decision must have an option specified and must include
+    prospective impression values.
+    """
+    raise NotImplementedError(
+      "Use one of the DecisionMethod subclasses to test consistency, not "
+      "DecisionMethod itself!"
+    )
+
 @utils.super_class_property()
 class Maximizing(DecisionMethod):
   """
@@ -128,6 +144,25 @@ class Maximizing(DecisionMethod):
 
     decision_model = decision.prospective_impressions
     goal_relevance = decision.goal_relevance
+    # TODO: Implement this!
+    pass
+
+  def consistency(self, decision):
+    """
+    See DecisionMethod.consistency.
+
+    Uses the dominance structure of pairwise rationales to compute consistency.
+    """
+    if not decision.option:
+      raise ValueError(
+        "Can't compute decision consistency before an option has been selected."
+      )
+
+    if not decision.prospective_impressions:
+      raise ValueError(
+        "Can't compute decision consistency before prospective impressions are "
+        "added."
+      )
     # TODO: Implement this!
     pass
 
@@ -158,6 +193,25 @@ class Satisficing(DecisionMethod):
     # TODO: Implement this!
     pass
 
+  def consistency(self, decision):
+    """
+    See DecisionMethod.consistency.
+
+    Uses option risks to evaluate consistency. TODO: More specific here.
+    """
+    if not decision.option:
+      raise ValueError(
+        "Can't compute decision consistency before an option has been selected."
+      )
+
+    if not decision.prospective_impressions:
+      raise ValueError(
+        "Can't compute decision consistency before prospective impressions are "
+        "added."
+      )
+    # TODO: Implement this!
+    pass
+
 @utils.super_class_property()
 class Utilizing(DecisionMethod):
   """
@@ -168,9 +222,70 @@ class Utilizing(DecisionMethod):
 
   Note: this is a bullshit decision method which is numerically convenient but
   not at all accurate.
+
+  Constants:
+
+    value_resolution:
+      determines the resolution at which utilities are considered
+      indistinguishable (unless one is positive/zero and the other is
+      negative/zero).
   """
+  value_resolution = 0.09
+
   def __new__(cls):
     return super().__new__(cls, "utilizing")
+
+  def rank_options(self, decision):
+    """
+    Ranks the options at the given decision into multiple equivalence classes
+    ordered by preference. Returns a list of pairs of (preference-value, list-
+    of-option-names). The given decision must include prospective impressions.
+    """
+    if not decision.prospective_impressions:
+      raise ValueError(
+        "Can't rank options until prospective impressions have been added."
+      )
+
+    decision_model = decision.prospective_impressions
+    goal_relevance = decision.goal_relevance
+
+    utilities = {}
+    for opt in decision_model:
+      # TODO: Does this work for options w/out any impressions?
+      utilities[opt] = 0
+      for goal in decision_model[opt]:
+        for pri in decision_model[opt][goal]:
+          utilities[opt] += pri.utility() * (
+            goal_relevance[goal]
+              if goal in goal_relevance
+              else 1
+          )
+
+    ulevels = reversed(sorted(list(utilities.values())))
+
+    strict = [
+      (u, [ gn for (gn, uv) in utilities.items() if uv == u ])
+        for u in ulevels
+    ]
+
+    # Merge levels according to value_resolution
+    i = 0
+    while i < len(strict):
+      u1 = strict[i][0]
+      u2 = strict[i+1][0]
+
+      if u1 > 0 and u2 <= 0 or u1 >= 0 and u2 < 0:
+        i += 1
+        continue
+
+      if u1 - u2 < value_resolution:
+        u, ol = strict.pop(i)
+        strict[i][0] = (u1 + u2) / 2
+        strict[i][1].extend(ol)
+        continue # without incrementing i
+    
+      # increment and continue
+      i += 1
 
   def decide(self, decision):
     """
@@ -184,24 +299,53 @@ class Utilizing(DecisionMethod):
         "Can't make a decision until prospective impressions have been added."
       )
 
-    decision_model = decision.prospective_impressions
-    goal_relevance = decision.goal_relevance
 
-    utilities = {}
-    for opt in decision_model:
-      utilities[opt] = 0
-      for goal in decision_model[opt]:
-        for pri in decision_model[opt][goal]:
-          utilities[opt] += pri.utility() * (
-            goal_relevance[goal]
-              if goal in goal_relevance
-              else 1
-          )
-
-    best_utility = sorted(list(utilities.values()))[-1]
-    best = [ opt for opt in utilities if utilities[opt] == best_utility ]
+    ranked = self.rank_options(self, decision)
+    best = ranked[0][1]
 
     return random.choice(best)
+
+  def consistency(self, decision):
+    """
+    See DecisionMethod.consistency.
+
+    Creates a utility scale based on the highest- and lowest-valued options at
+    this choice and interpolates according to the utility of the chosen option.
+    """
+    if not decision.option:
+      raise ValueError(
+        "Can't compute decision consistency before an option has been selected."
+      )
+
+    if not decision.prospective_impressions:
+      raise ValueError(
+        "Can't compute decision consistency before prospective impressions are "
+        "added."
+      )
+
+    ranked = self.rank_options(self, decision)
+    best_utility = ranked[0][0]
+    worst_utility = ranked[-1][0]
+    lower_bound = (-1 + worst_utility) / 2
+
+    chosen_utility = None
+    for u, ol in ranked:
+      if decision.option.name in ol:
+        chosen_utility = u
+        break
+
+    if chosen_utility is None:
+      raise RuntimeError(
+        "Selected option '{}' wasn't found among ranked options!".format(
+          decision.option.name
+        )
+      )
+
+    # TODO: Something else here?
+    # TODO: Note that this isn't quite correct, because there should be more
+    # tolerance when the utility range is low, but figuring out what the
+    # threshold for "low" is is difficult.
+    return (chosen_utility - worst_utility) / (best_utility - worst_utility)
 
 @utils.super_class_property()
 class Randomizing(DecisionMethod):
@@ -222,6 +366,26 @@ class Randomizing(DecisionMethod):
     This is just a baseline model.
     """
     return random.choice(list(decision.choice.options.keys()))
+
+  def consistency(self, decision):
+    """
+    See DecisionMethod.consistency.
+
+    Always returns 1, because every option is equally consistent with random
+    decision making.
+    """
+    if not decision.option:
+      raise ValueError(
+        "Can't compute decision consistency before an option has been selected."
+      )
+
+    if not decision.prospective_impressions:
+      raise ValueError(
+        "Can't compute decision consistency before prospective impressions are "
+        "added."
+      )
+
+    return 1.0
 
 
 class Decision:

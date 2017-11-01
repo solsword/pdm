@@ -227,22 +227,15 @@ class PlayerModel:
       # adjust base priority and continue to the next rank
       current_base_prioity = max_priority_so_far + 1
 
-  def impute_prospective_impressions(self, choice):
-    self._synthesize_moe()
-
-  def impute_retrospective_impressions(self, choice):
-    """
-    TODO: HERE
-    """
-    pass
-
-
   def make_decision(self, choice, outcomes=None):
     """
     Given a choice, creates a Decision object by building a decision model
     using an updated-if-necessary full mode of engagement and then deciding on
-    an option using a DecisionMethod.
+    an option using this player's DecisionMethod. Rolls outcomes and adds
+    retrospective impressions to the created decision as well.
     """
+    # TODO: Some way to model cognitive dissonance + regret when a reveal
+    # changes goals and/or brings new facts to light about an old decision?
     self._synthesize_moe()
     decision = decision.Decision(choice)
     decision.add_prospective_impressions(
