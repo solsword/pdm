@@ -157,6 +157,8 @@ class PlayerModel:
 
     self._synthesize_moe()
 
+  # TODO: HERE (add _pack_ and _unpack_ methods)
+
   def set_decision_method(self, dm):
     """
     Updates this player's decision method.
@@ -227,7 +229,7 @@ class PlayerModel:
       # adjust base priority and continue to the next rank
       current_base_prioity = max_priority_so_far + 1
 
-  def make_decision(self, choice, outcomes=None):
+  def make_decision(self, choice):
     """
     Given a choice, creates a Decision object by building a decision model
     using an updated-if-necessary full mode of engagement and then deciding on
@@ -237,14 +239,30 @@ class PlayerModel:
     # TODO: Some way to model cognitive dissonance + regret when a reveal
     # changes goals and/or brings new facts to light about an old decision?
     self._synthesize_moe()
-    decision = decision.Decision(choice)
-    decision.add_prospective_impressions(
+    dec = decision.Decision(choice)
+    dec.add_prospective_impressions(
       self.priority_method,
       self._synthesized_mode_of_engagement
     )
-    selection = self.decision_method.decide(decision)
-    decision.select_option(selection)
-    decision.roll_outcomes()
-    decision.add_retrospective_impressions()
+    selection = self.decision_method.decide(dec)
+    dec.select_option(selection)
+    dec.roll_outcomes()
+    dec.add_retrospective_impressions()
 
     return decision
+
+  def assess_decision(self, choice, option):
+    """
+    Takes a Choice and an option at that choice, and assesses how consistent
+    that decision is with this player model from a prospective standpoint,
+    returning a number between 0 (completely inconsistent) and 1 (perfectly
+    consistent).
+    """
+    self._synthesize_moe()
+    dec = decision.Decision(choice)
+    dec.add_prospective_impressions(
+      self.priority_method,
+      self._synthesized_mode_of_engagement
+    )
+    dec.select_option(choice)
+    return self.decision_method.consistency(dec)
