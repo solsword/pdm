@@ -87,6 +87,7 @@ class PlayerModel:
       adjustment of 0.
 
     goal_overrides:
+      TODO: Implement these!?!
       A mapping from goal names to new priority values for individual goals.
       These are absolute, and will set a goal's priority independent of goal
       priorities derived from modes of engagement. The goal that they refer to
@@ -158,6 +159,91 @@ class PlayerModel:
     self._synthesize_moe()
 
   # TODO: HERE (add _pack_ and _unpack_ methods)
+  def _pack_(self):
+    """
+    Returns a simple representation of this option suitable for direct
+    conversion to JSON.
+
+    Example:
+
+    ```
+    Outcome(
+      "dies",
+      { "befriend_dragon": "awful", "kill_dragon": "great" },
+      "hinted",
+      "unlikely",
+      "even"
+    )
+    ```
+    {
+      "actual_likelihood": "even",
+      "apparent_likelihood": "unlikely",
+      "effects": {
+        "befriend_dragon": "awful",
+        "kill_dragon": "great"
+      },
+      "name": "dies",
+      "salience": "hinted"
+    }
+    ```
+    """
+    result = {
+      "name": self.name,
+      "decision_method": pack(self.decision_method),
+      "modes": { key: pack(val) for (key, val) in self.modes.items() }
+    }
+    # TODO: HERE: This != is bad!
+    if self.priority_method != engagement.PriorityMethod.soft:
+      result["priority_method"] = pack(self.priority_method)
+
+    nondefault_mode_rankings = {
+      mn: self.mode_ranking[mn]
+        for mn in self.mode_ranking
+        if self.mode_ranking[mn] != engagement.DEFAULT_PRIORITY
+    }
+    if nondefault_mode_rankings:
+      result["mode_ranking"] = nondefault_mode_rankings
+
+    nonzero_adjustments = {
+      mn: self.mode_adjustments[mn]
+        for mn in self.mode_adjustments
+        if self.mode_adjustments[mn] != 0
+    }
+    if nonzero_adjustments:
+      result["mode_adjustments"] = nonzero_adjustments
+
+    nonzero_adjustments = {
+      gn: self.goal_adjustments[gn]
+        for gn in self.goal_adjustments
+        if self.goal_adjustments[gn] != 0
+    }
+    if nonzero_adjustments:
+      result["goal_adjustments"] = nonzero_adjustments
+
+    if self.goal_overrides:
+      result["goal_overrides"] = self.goal_overrides
+
+    return result
+
+  def _unpack_(obj):
+    """
+    The inverse of `_pack_`; constructs an instance from a simple object (e.g.,
+    one produced by json.loads).
+    """
+    return PlayerModel(
+      obj["name"],
+      unpack(obj["decision_method"], decision.DecisionMethod),
+      {
+        key: unpack(val, engagement.ModeOfEngagement)
+          for (key, val) in obj["modes"].items()
+      },
+      unpack(obj["priority_method"], engagement.PriorityMethod) \
+        if "priority_method" in obj else engagement.PriorityMethod.soft,
+      obj["mode_ranking"] if "mode_ranking" in obj else None,
+      obj["mode_adjustments"] if "mode_adjustments" in obj else None,
+      obj["goal_adjustments"] if "goal_adjustments" in obj else None,
+      obj["goal_overrides"] if "goal_overrides" in obj else None
+    )
 
   def set_decision_method(self, dm):
     """

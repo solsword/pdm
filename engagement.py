@@ -38,6 +38,19 @@ class PriorityMethod:
     """
     raise NotImplementedError("You must use a subclass of PriorityMethod.")
 
+ # TODO: HERE
+ def _pack_(self):
+   if type(self) == Soft:
+     return ("soft", self.falloff)
+   elif type(self) == Hard:
+     return ("hard", None)
+
+ def _unpack_(obj):
+   if obj[0] == "soft":
+     return Soft(obj[1])
+   elif obj[0] == "hard":
+     return Hard()
+
 @utils.super_class_property()
 class Soft(PriorityMethod):
   """

@@ -47,6 +47,36 @@ import player
 
 from packable import pack, unpack
 
+def combine_per_choice(*args):
+  """
+  Combines two or more per-choice analytics results into 
+  """
+  result = args.pop()
+  while args:
+    other = args.pop()
+    for key in other:
+      if key not in result:
+        result[key] = other[key]
+      else:
+        old_weight, old_averages = result[key]
+        other_weight, other_averages = other[key]
+        if set(old_averages.keys()) != set(new_averages.keys()):
+          raise ValueError(
+            "Can't combine per-choice results which used different sets of "
+            "player models."
+          )
+        new_weight = old_weight + other_weight
+        new_averages = {}
+        for pmn in old_averages:
+          new_averages[pmn] = (
+            old_averages[pmn] * old_weight
+          + other_averages[pmn] * other_weight
+          ) / new_weight
+        result[key] = (new_weight, new_averages)
+
+  return result
+
+
 def analyze_trace(models, choices, trace):
   """
   Takes a list of player.PlayerModels, a list of choice.Choices, and a list of
@@ -56,6 +86,45 @@ def analyze_trace(models, choices, trace):
   Analyzes how well each decision agrees with each player model, and records
   along-trace, per-choice, and overall statistics about consistency.
   """
+  choices = {
+    ch.name: ch
+      for ch in choices
+  }
+  agreements = []
+  by_cname = {}
+  for cname, decision in trace:
+    agreement = {
+      pm.name: pm.assess_decision(choices[cname], decision)
+        for pm in models
+    }
+    agreements.append(agreement)
+    if cname not in by_cname:
+      by_cname[cname] = []
+    by_cname[cname].append(agreement)
+
+  averages = {
+    pm.name: sum(trajectories[pm.name]) / len(trajectories[pm.name])
+      for pm in models
+  }
+
+  trajectories = {
+    pm.name: [ agr[pm.name] for agr in agreements ]
+      for pm in models
+  }
+
+  per_choice = {
+    cname: (
+      len(by_cname[cname]),
+      {
+        sum(by_cname[cname][pm.name]) / len(by_cname[cname][pm.name])
+          for pm in models
+      }
+    )
+      for cname in choices
+  }
+
+  return averages, trajectories, per_choice
+
 
 def main(models_str, choices_str, trace_strings):
   """
@@ -86,10 +155,19 @@ def main(models_str, choices_str, trace_strings):
   traces = [json.loads(st) for st in trace_strings]
 
   results = [analyze_trace(models, choices, tr) for tr in traces]
+  overall_per_choice = combine_per_choice(*[res[2] for res in results])
 
   # TODO: More formatting here
   for res in results:
-    print(res)
+    print("Averages:\n", res[0])
+    print('-'*80)
+
+  for cn in overall_per_choice:
+    times, agreements = overall_per_choice[cn]
+    print("Choice: '{}' (seen {} times)".format(cn, times))
+    print("Model agreement:")
+    for pmn in agreements:
+      print("  {}: {:.3f}".format(pmn, agreements[pmn]))
     print('-'*80)
 
 
