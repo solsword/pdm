@@ -549,53 +549,35 @@ class Decision:
   def __hash__(self):
     h = hash(self.choice)
     h ^= hash(self.option)
-    for i, on in enumerate(self.outcomes):
-      if i % 2:
-        h ^= hash(self.outcomes[on])
-      else:
-        h += hash(self.outcomes[on])
+    for on in self.outcomes:
+      h ^= 583948 + hash(self.outcomes[on])
 
     if self.prospective_impressions:
       for on in self.prospective_impressions:
         option_impressions = self.prospective_impressions[on]
         oh = hash(on)
-        for i, gn in enumerate(option_impressions):
-          if i % 2:
-            h ^= hash(tuple(option_impressions[gn])) + oh
-          else:
-            h += hash(tuple(option_impressions[gn])) ^ oh
+        for gn in option_impressions:
+          h ^= 874387 + hash(tuple(option_impressions[gn])) + oh
 
     if self.factored_decision_models:
       for dm in self.factored_decision_models:
         for on in dm:
           option_impressions = dm[on]
           oh = hash(on)
-          for i, gn in enumerate(option_impressions):
-            if i % 2:
-              h ^= hash(tuple(option_impressions[gn])) + oh
-            else:
-              h += hash(tuple(option_impressions[gn])) ^ oh
+          for gn in option_impressions:
+            h ^= 231893 + hash(tuple(option_impressions[gn])) + oh
 
     if self.goal_relevance:
-      for i, gn in enumerate(self.goal_relevance):
-        if i % 2:
-          h ^= hash(gn) + hash(self.goal_relevance[gn])
-        else:
-          h += hash(gn) ^ hash(self.goal_relevance[gn])
+      for gn in self.goal_relevance:
+        h ^= 3321564 + hash(gn) + hash(self.goal_relevance[gn])
 
     if self.retrospective_impressions:
-      for i, gn in enumerate(self.retrospective_impressions):
-        if i % 2:
-          h ^= hash(gn) + hash(tuple(self.retrospective_impressions[gn]))
-        else:
-          h += hash(gn) ^ hash(tuple(self.retrospective_impressions[gn]))
+      for gn in self.retrospective_impressions:
+        h ^= 67894 + hash(gn) + hash(tuple(self.retrospective_impressions[gn]))
 
     if self.simplified_retrospectives:
-      for i, gn in enumerate(self.simplified_retrospectives):
-        if i % 2:
-          h ^= hash(gn) + hash(self.simplified_retrospectives[gn])
-        else:
-          h += hash(gn) ^ hash(self.simplified_retrospectives[gn])
+      for gn in self.simplified_retrospectives:
+        h ^= 848846 + hash(gn) + hash(self.simplified_retrospectives[gn])
 
     return h
 

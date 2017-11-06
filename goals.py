@@ -62,10 +62,10 @@ class PlayerGoal:
       return GOALS_REGISTRY[obj]
 
     gl = globals()
-    if obj.type in gl and issubclass(gl[obj.type], PlayerGoal):
-      return gl[obj.type](obj.name)
+    if obj["type"] in gl and issubclass(gl[obj["type"]], PlayerGoal):
+      return gl[obj["type"]](obj["name"])
     else:
-      raise TypeError("Unknown goal type '{}'.".format(obj.type))
+      raise TypeError("Unknown goal type '{}'.".format(obj["type"]))
 
   def get(key):
     if key not in GOALS_REGISTRY:

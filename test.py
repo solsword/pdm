@@ -14,7 +14,8 @@ from diffable import diff
 
 from base_types import Certainty, Valence, Salience
 from choice import Choice, Option, Outcome
-from engagement import PriorityMethod, ModeOfEngagement
+from engagement import PriorityMethod, SoftPriority, HardPriority, \
+                       ModeOfEngagement
 from player import PlayerModel
 from decision import DecisionMethod, Decision
 from perception import Percept, Prospective, Retrospective
@@ -97,9 +98,10 @@ def mktest_packable(cls):
 
 for cls in [
   Outcome, Option, Choice,
-  ModeOfEngagement,
+  PriorityMethod, ModeOfEngagement,
   Percept, Prospective, Retrospective,
   DecisionMethod, Decision,
+  PlayerModel,
 ]:
   mktest_packable(cls)
 

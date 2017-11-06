@@ -116,11 +116,8 @@ class Outcome:
 
   def __hash__(self):
     h = hash(self.name)
-    for i, g in enumerate(self.goal_effects):
-      if i % 2:
-        h ^= hash(self.goal_effects[g]) + hash(g)
-      else:
-        h += hash(self.goal_effects[g]) ^ hash(g)
+    for gn in self.goal_effects:
+      h ^= 129831 + hash(self.goal_effects[gn]) + hash(gn)
 
     h += hash(self.salience)
     h ^= hash(self.apparent_likelihood)
@@ -246,11 +243,8 @@ class Option:
 
   def __hash__(self):
     h = hash(self.name)
-    for i, out in enumerate(self.outcomes):
-      if i % 2:
-        h ^= hash(self.outcomes[out])
-      else:
-        h += hash(self.outcomes[out])
+    for out in self.outcomes:
+      h ^= 598348 + hash(self.outcomes[out])
 
     return h
 
@@ -427,11 +421,8 @@ class Choice:
 
   def __hash__(self):
     h = hash(self.name)
-    for i, opt in enumerate(self.options):
-      if i % 2:
-        h ^= hash(self.options[opt])
-      else:
-        h += hash(self.options[opt])
+    for opt in self.options:
+      h ^= 91894 + hash(self.options[opt])
 
     return h
 

@@ -4,11 +4,16 @@ player.py
 PlayerModel code.
 """
 
+import copy
+
 import utils
 
 import engagement
 import perception
 import decision
+
+from packable import pack, unpack
+from diffable import diff
 
 class PlayerModel:
   """
@@ -40,7 +45,7 @@ class PlayerModel:
     name,
     decision_method,
     modes_of_engagement,
-    priority_method=engagement.PriorityMethod.soft,
+    priority_method=engagement.PriorityMethod.softpriority,
     mode_ranking=None,
     mode_adjustments=None,
     goal_adjustments=None,
@@ -87,11 +92,14 @@ class PlayerModel:
       adjustment of 0.
 
     goal_overrides:
-      TODO: Implement these!?!
       A mapping from goal names to new priority values for individual goals.
       These are absolute, and will set a goal's priority independent of goal
       priorities derived from modes of engagement. The goal that they refer to
-      must still be included in a constituent mode of engagement, though.
+      must still be included in a constituent mode of engagement, though, and
+      mode rankings take priorities over goal overrides. So if you have a goal
+      with override priority 1, it will still be lower priority than all goals
+      from modes of engagement which don't include it that are ranked higher in
+      the mode ranking.
     """
     self.name = name
 
@@ -117,7 +125,7 @@ class PlayerModel:
 
     all_mode_names = set(self.modes.keys())
 
-    self.mode_ranking = mode_ranking or {
+    self.mode_ranking = copy.deepcopy(mode_ranking) or {
       m: engagement.DEFAULT_PRIORITY
         for m in all_mode_names
     }
@@ -128,7 +136,9 @@ class PlayerModel:
       "Ranking for mode '{}' discarded (no matching mode)."
     )
 
-    self.mode_adjustments = mode_adjustments or { m: 0 for m in all_mode_names }
+    self.mode_adjustments = copy.deepcopy(mode_adjustments) or {
+      m: 0 for m in all_mode_names
+    }
     utils.conform_keys(
       all_mode_names,
       self.mode_adjustments,
@@ -138,9 +148,11 @@ class PlayerModel:
 
     all_goal_names = set()
     for k in all_mode_names:
-      all_goal_names.update(self.modes[k].get_goals().keys())
+      all_goal_names.update(self.modes[k].goals.keys())
 
-    self.goal_adjustments = goal_adjustments or { g: 0 for g in all_goal_names }
+    self.goal_adjustments = copy.deepcopy(goal_adjustments) or {
+      g: 0 for g in all_goal_names
+    }
     utils.conform_keys(
       all_goal_names,
       self.goal_adjustments,
@@ -148,7 +160,7 @@ class PlayerModel:
       "Adjustment for goal '{}' discarded (no matching goal in any mode)."
     )
 
-    self.goal_overrides = goal_overrides
+    self.goal_overrides = copy.deepcopy(goal_overrides)
     utils.conform_keys(
       all_goal_names,
       self.goal_overrides,
@@ -158,32 +170,138 @@ class PlayerModel:
 
     self._synthesize_moe()
 
-  # TODO: HERE (add _pack_ and _unpack_ methods)
+  def __eq__(self, other):
+    if type(other) != PlayerModel:
+      return False
+    if self.name != other.name:
+      return False
+    if self.decision_method != other.decision_method:
+      return False
+    if self.modes != other.modes:
+      return False
+    if self.priority_method != other.priority_method:
+      return False
+    if self.mode_ranking != other.mode_ranking:
+      return False
+    if self.mode_adjustments != other.mode_adjustments:
+      return False
+    if self.goal_adjustments != other.goal_adjustments:
+      return False
+    if self.goal_overrides != other.goal_overrides:
+      return False
+    return True
+
+  def __hash__(self):
+    result = hash(self.name) + hash(self.decision_method)
+    for moe in self.modes.keys():
+      result ^= hash(moe)
+    result += hash(self.priority_method)
+    for mn in self.mode_ranking:
+      result ^= (self.mode_ranking[mn] + 17) * hash(mn)
+    for mn in self.mode_adjustments:
+      result ^= (self.mode_adjustments[mn] + 4039493) * hash(mn)
+    for gn in self.goal_adjustments:
+      result ^= (self.goal_adjustments[gn] + 6578946) * hash(gn)
+    for gn in self.goal_overrides:
+      result ^= (self.goal_overrides[gn] + 795416) * hash(gn)
+    return result
+
+  def _diff_(self, other):
+    """
+    Reports differences (see diffable.py).
+    """
+    result = []
+    if self.name != other.name:
+      result.append("names: '{}' != '{}'".format(self.name, other.name))
+    result.extend([
+      "decision_methods: {}".format(d)
+        for d in diff(self.decision_method, other.decision_method)
+    ])
+    result.extend([
+      "modes: {}".format(d)
+        for d in diff(self.modes, other.modes)
+    ])
+    result.extend([
+      "priority_methods: {}".format(d)
+        for d in diff(self.priority_method, other.priority_method)
+    ])
+    result.extend([
+      "mode_rankings: {}".format(d)
+        for d in diff(self.mode_ranking, other.mode_ranking)
+    ])
+    result.extend([
+      "mode_adjustments: {}".format(d)
+        for d in diff(self.mode_adjustments, other.mode_adjustments)
+    ])
+    result.extend([
+      "goal_adjustments: {}".format(d)
+        for d in diff(self.goal_adjustments, other.goal_adjustments)
+    ])
+    result.extend([
+      "goal_overrides: {}".format(d)
+        for d in diff(self.goal_overrides, other.goal_overrides)
+    ])
+    return result
+
   def _pack_(self):
     """
     Returns a simple representation of this option suitable for direct
     conversion to JSON.
 
     Example:
+      (Note that this example's use of mode/goal rankings/adjustments is a bit
+      silly as the mode rankings are enough to affectively achieve the desired
+      priorities alone.)
 
     ```
-    Outcome(
-      "dies",
-      { "befriend_dragon": "awful", "kill_dragon": "great" },
-      "hinted",
-      "unlikely",
-      "even"
+    PlayerModel(
+      "aggressive",
+      DecisionMethod.utilizing,
+      {
+        "defensive": ModeOfEngagement(
+          "defensive",
+          [ "attack", "defend" ],
+          { "attack": 3, "defend": 2 }
+        ),
+        "aggressive": ModeOfEngagement(
+          "aggressive",
+          [ "attack", "defend" ],
+          { "attack": 2, "defend": 3 }
+        )
+      },
+      SoftPriority(0.6),
+      mode_ranking={ "defensive": 2, "aggressive": 1 },
+      mode_adjustments={ "defensive": 1 },
+      goal_adjustments={ "defend": 1 },
+      goal_overrides={ "attack": 1 }
     )
     ```
     {
-      "actual_likelihood": "even",
-      "apparent_likelihood": "unlikely",
-      "effects": {
-        "befriend_dragon": "awful",
-        "kill_dragon": "great"
+      "name": "aggressive",
+      "decision_method": "utilizing",
+      "modes": {
+        "defensive": {
+          "name": "defensive",
+          "goals": [
+            { "name": "attack", "type": "PlayerGoal" },
+            { "name": "defend", "type": "PlayerGoal" }
+          ],
+          "priorities": { "attack": 3, "defend": 2 }
+        },
+        "aggressive": {
+          "name": "aggressive",
+          "goals": [
+            { "name": "attack", "type": "PlayerGoal" },
+            { "name": "defend", "type": "PlayerGoal" }
+          ],
+          "priorities": { "attack": 2, "defend": 3 }
+        }
       },
-      "name": "dies",
-      "salience": "hinted"
+      "priority_method": [ "softpriority", 0.6 ],
+      "mode_ranking": { "defensive": 2, "aggressive": 1 },
+      "mode_adjustments": { "defensive": 1 },
+      "goal_adjustments": { "defend": 1 },
+      "goal_overrides": { "attack": 1 }
     }
     ```
     """
@@ -192,8 +310,7 @@ class PlayerModel:
       "decision_method": pack(self.decision_method),
       "modes": { key: pack(val) for (key, val) in self.modes.items() }
     }
-    # TODO: HERE: This != is bad!
-    if self.priority_method != engagement.PriorityMethod.soft:
+    if self.priority_method != engagement.PriorityMethod.softpriority:
       result["priority_method"] = pack(self.priority_method)
 
     nondefault_mode_rankings = {
@@ -238,7 +355,7 @@ class PlayerModel:
           for (key, val) in obj["modes"].items()
       },
       unpack(obj["priority_method"], engagement.PriorityMethod) \
-        if "priority_method" in obj else engagement.PriorityMethod.soft,
+        if "priority_method" in obj else engagement.PriorityMethod.softpriority,
       obj["mode_ranking"] if "mode_ranking" in obj else None,
       obj["mode_adjustments"] if "mode_adjustments" in obj else None,
       obj["goal_adjustments"] if "goal_adjustments" in obj else None,
@@ -292,17 +409,20 @@ class PlayerModel:
       max_priority_so_far = None
       # synthesize each mode at this rank:
       for mn in modes_here:
-        mg = self.modes[mn].goals()
+        mg = self.modes[mn].goals
         madj = self.mode_adjustments[mn]
         for gn in mg:
-          adjp = (
-            current_base_prioity
-          + mn.get_priority(gn)
-          + madj
-          + self.goal_adjustments[gn]
-          )
+          if gn in self.goal_overrides:
+            adjp = self.goal_overrides[gn]
+          else:
+            adjp = (
+              current_base_prioity
+            + self.modes[mn].get_priority(gn)
+            + madj
+            + self.goal_adjustments[gn]
+            )
 
-          if gn in self._synthesized_mode_of_engagement.goals():
+          if gn in self._synthesized_mode_of_engagement.goals:
             if adjp < self._synthesized_mode_of_engagement.get_priority(gn):
               self._synthesized_mode_of_engagement.set_priority(gn, adjp)
             # else do nothing

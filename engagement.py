@@ -19,6 +19,7 @@ DEFAULT_PRIORITY:
 import utils
 
 from packable import pack, unpack
+from diffable import diff
 
 from perception import Prospective
 from goals import PlayerGoal
@@ -27,8 +28,64 @@ DEFAULT_PRIORITY = 5
 
 class PriorityMethod:
   """
-  Types for specifying how priorities should be handled.
+  Types for specifying how priorities should be handled. Note that some
+  subtypes don't use the 'factor' field.
   """
+  def __init__(self, factor=None):
+    self.factor = factor
+
+  def __eq__(self, other):
+    if not isinstance(other, type(self)):
+      return False
+    if other.factor != self.factor:
+      return False
+    return True
+
+  def __hash__(self):
+    return hash(self.type) + 31839283 ^ hash(self.factor)
+
+  def _diff_(self, other):
+    """
+    Reports differences (see diffable.py).
+    """
+    if self.factor != other.factor:
+      return [ "factors: {} != {}".format(self.factor, other.factor) ]
+    else:
+      return []
+
+  def _pack_(self):
+    """
+    Returns a simple representation of this option suitable for direct
+    conversion to JSON.
+
+    Examples:
+
+    ```
+    SoftPriority(0.5)
+    ```
+    ["softpriority", 0.5]
+    ```
+    HardPriority()
+    ```
+    ["hardpriority", None]
+    ```
+    """
+    return [type(self).__name__.lower(), self.factor]
+
+  def _unpack_(obj):
+    """
+    The inverse of `_pack_`; constructs an instance from a simple object (e.g.,
+    one produced by json.loads).
+    """
+    if hasattr(PriorityMethod, obj[0]):
+      default = getattr(PriorityMethod, obj[0])
+      if obj[1] == None:
+        return default
+      else:
+        return type(default)(obj[1])
+    else:
+      raise ValueError("Unknown PriorityMethod type '{}'".format(obj[0]))
+
   def factor_decision_model(self, dm, priorities):
     """
     Takes a map from option names to maps from goal names to Prospective
@@ -38,48 +95,32 @@ class PriorityMethod:
     """
     raise NotImplementedError("You must use a subclass of PriorityMethod.")
 
- # TODO: HERE
- def _pack_(self):
-   if type(self) == Soft:
-     return ("soft", self.falloff)
-   elif type(self) == Hard:
-     return ("hard", None)
-
- def _unpack_(obj):
-   if obj[0] == "soft":
-     return Soft(obj[1])
-   elif obj[0] == "hard":
-     return Hard()
-
-@utils.super_class_property()
-class Soft(PriorityMethod):
+@utils.super_class_property(0.75) # this is the default soft factor
+class SoftPriority(PriorityMethod):
   """
-  In Soft mode, priorities represent relative importance, with each integer
-  difference in priority representing being 'falloff' less important.
+  In SoftPriority mode, priorities represent relative importance, with each
+  integer difference in priority representing being 'factor' less important.
   """
-  def __init__(self, falloff=2/3):
-    self.falloff = falloff
-
   def factor_decision_model(self, dm, priorities):
     """
     See PriorityMethod.factor_decision_model.
 
     Puts all goals together into the same decision model, but assigns
-    relevances according to the given goal priorities and this object's falloff
+    relevances according to the given goal priorities and this object's factor
     value.
     """
     models = [ dm ]
     all_goals = set()
     for opt in dm:
       all_goals |= dm[opt].keys()
-    relevances = { gn: self.falloff**(priorities[gn]-1) for gn in all_goals }
+    relevances = { gn: self.factor**(priorities[gn]-1) for gn in all_goals }
     return models, relevances
 
 @utils.super_class_property()
-class Hard(PriorityMethod):
+class HardPriority(PriorityMethod):
   """
-  In Hard mode, priorities represent absolute precedence, so decisions are
-  made at the highest available priority level (lowest priority value) and
+  In HardPriority mode, priorities represent absolute precedence, so decisions
+  are made at the highest available priority level (lowest priority value) and
   lower levels are only considered in order to break ties.
   """
   def factor_decision_model(self, dm, priorities):
@@ -163,15 +204,26 @@ class ModeOfEngagement:
 
   def __hash__(self):
     h = hash(self.name)
-    for i, gn in enumerate(self.goals):
-      if i % 2:
-        h ^= hash(self.goals[gn])
-        h += hash(self.priorities[gn])
-      else:
-        h += hash(self.goals[gn])
-        h ^= hash(self.priorities[gn])
+    for gn in self.goals:
+      h ^= 29812 + hash(self.goals[gn])
+      h ^= 78237 + hash(self.priorities[gn])
 
     return h
+
+  def _diff_(self, other):
+    """
+    Reports differences (see diffable.py).
+    """
+    result = []
+    result.extend([
+      "goals: {}".format(d)
+        for d in diff(self.goals, other.goals)
+    ])
+    result.extend([
+      "priorities: {}".format(d)
+        for d in diff(self.priorities, other.priorities)
+    ])
+    return result
 
   def _pack_(self):
     """
@@ -193,8 +245,8 @@ class ModeOfEngagement:
     {
       "name": "friendly_but_cautious",
       "goals": [
-        "befriend_dragon",
-        "health_and_safety"
+        { "name": "befriend_dragon", "type": "PlayerGoal" },
+        { "name": "health_and_safety", "type": "PlayerGoal" }
       ],
       "priorities": {
         "befriend_dragon": 2,
@@ -219,13 +271,6 @@ class ModeOfEngagement:
       obj["priorities"]
     )
 
-  def get_goals(self):
-    """
-    Returns dictionary mapping goal names to goals. The return value is not a
-    copy, and shouldn't be modified.
-    """
-    return self.goals
-
   def add_goal(self, goal, priority=DEFAULT_PRIORITY):
     """
     Adds the given goal with the given priority. Raises a ValueError if a goal
@@ -238,7 +283,7 @@ class ModeOfEngagement:
           " is already part of that mode."
         ).format(goal.name, self.name)
       )
-    self.goals[goal.name]
+    self.goals[goal.name] = goal
     self.priorities[goal.name] = priority
 
   def remove_goal(self, goal_name):
