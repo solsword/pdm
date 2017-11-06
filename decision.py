@@ -238,8 +238,9 @@ class Utilizing(DecisionMethod):
   def rank_options(self, decision):
     """
     Ranks the options at the given decision into multiple equivalence classes
-    ordered by preference. Returns a list of pairs of (preference-value, list-
-    of-option-names). The given decision must include prospective impressions.
+    ordered by preference. Returns an ordered list of pairs of (preference-
+    value, list-of-option-names). The given decision must include prospective
+    impressions.
     """
     if not decision.prospective_impressions:
       raise ValueError(
@@ -264,13 +265,13 @@ class Utilizing(DecisionMethod):
     ulevels = reversed(sorted(list(utilities.values())))
 
     strict = [
-      (u, [ gn for (gn, uv) in utilities.items() if uv == u ])
+      [u, [ gn for (gn, uv) in utilities.items() if uv == u ]]
         for u in ulevels
     ]
 
     # Merge levels according to value_resolution
     i = 0
-    while i < len(strict):
+    while i < len(strict) - 1:
       u1 = strict[i][0]
       u2 = strict[i+1][0]
 
@@ -278,7 +279,7 @@ class Utilizing(DecisionMethod):
         i += 1
         continue
 
-      if u1 - u2 < value_resolution:
+      if u1 - u2 < self.value_resolution:
         u, ol = strict.pop(i)
         strict[i][0] = (u1 + u2) / 2
         strict[i][1].extend(ol)
@@ -286,6 +287,8 @@ class Utilizing(DecisionMethod):
     
       # increment and continue
       i += 1
+
+    return strict
 
   def decide(self, decision):
     """
@@ -300,7 +303,7 @@ class Utilizing(DecisionMethod):
       )
 
 
-    ranked = self.rank_options(self, decision)
+    ranked = self.rank_options(decision)
     best = ranked[0][1]
 
     return random.choice(best)
@@ -323,10 +326,10 @@ class Utilizing(DecisionMethod):
         "added."
       )
 
-    ranked = self.rank_options(self, decision)
+    ranked = self.rank_options(decision)
     best_utility = ranked[0][0]
     worst_utility = ranked[-1][0]
-    lower_bound = (-1 + worst_utility) / 2
+    lower_bound = -0.5 + worst_utility / 2
 
     chosen_utility = None
     for u, ol in ranked:
@@ -345,7 +348,15 @@ class Utilizing(DecisionMethod):
     # TODO: Note that this isn't quite correct, because there should be more
     # tolerance when the utility range is low, but figuring out what the
     # threshold for "low" is is difficult.
-    return (chosen_utility - worst_utility) / (best_utility - worst_utility)
+
+    #denom = float(best_utility) - float(worst_utility)
+    denom = float(best_utility) - float(lower_bound)
+    if denom == 0:
+      return 1.0 # all options are the same, so any choice is compatible
+    else:
+      # TODO: Which of these?!?
+      #return (chosen_utility - worst_utility) / (best_utility - worst_utility)
+      return (float(chosen_utility) - float(lower_bound)) / denom
 
 @utils.super_class_property()
 class Randomizing(DecisionMethod):
@@ -872,11 +883,14 @@ class Decision:
       self.choice
     )
 
+
     (
       self.factored_decision_models,
       self.goal_relevance
-    ) = priority_method.factor_decision_model(
-      self.decision_model
+    ) = mode_of_engagement.get_factored_decision_model(
+      self.choice,
+      priority_method,
+      dm=self.prospective_impressions
     )
 
   def add_retrospective_impressions(self):

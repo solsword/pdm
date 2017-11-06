@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 analyze_traces.py
 
@@ -51,6 +52,7 @@ def combine_per_choice(*args):
   """
   Combines two or more per-choice analytics results into 
   """
+  args = list(args)
   result = args.pop()
   while args:
     other = args.pop()
@@ -102,25 +104,28 @@ def analyze_trace(models, choices, trace):
       by_cname[cname] = []
     by_cname[cname].append(agreement)
 
-  averages = {
-    pm.name: sum(trajectories[pm.name]) / len(trajectories[pm.name])
-      for pm in models
-  }
-
   trajectories = {
     pm.name: [ agr[pm.name] for agr in agreements ]
       for pm in models
   }
 
+  averages = {
+    pm.name: sum(trajectories[pm.name]) / len(trajectories[pm.name])
+      for pm in models
+  }
+
+  # TODO: This correctly HERE
   per_choice = {
     cname: (
       len(by_cname[cname]),
       {
-        sum(by_cname[cname][pm.name]) / len(by_cname[cname][pm.name])
+        pm: sum(
+          [ agr[pm.name] for agr in by_cname[cname] ]
+        ) / len(by_cname[cname])
           for pm in models
       }
     )
-      for cname in choices
+      for cname in by_cname
   }
 
   return averages, trajectories, per_choice
@@ -175,7 +180,7 @@ if __name__ == "__main__":
   args = sys.argv[1:]
   if len(args) < 3:
     print(
-      "Error: At least 3 arguments are required.\n\n{}".format(USAGE)
+      "Error: At least 3 arguments are required.\n\n{}".format(USAGE),
       file=sys.stderr
     )
     exit(1)

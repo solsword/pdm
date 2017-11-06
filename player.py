@@ -160,7 +160,7 @@ class PlayerModel:
       "Adjustment for goal '{}' discarded (no matching goal in any mode)."
     )
 
-    self.goal_overrides = copy.deepcopy(goal_overrides)
+    self.goal_overrides = copy.deepcopy(goal_overrides) or {}
     utils.conform_keys(
       all_goal_names,
       self.goal_overrides,
@@ -169,6 +169,10 @@ class PlayerModel:
     )
 
     self._synthesize_moe()
+
+  def __str__(self):
+    # TODO: Different here?
+    return "PlayerModel('{}')".format(self.name)
 
   def __eq__(self, other):
     if type(other) != PlayerModel:
@@ -356,10 +360,13 @@ class PlayerModel:
       },
       unpack(obj["priority_method"], engagement.PriorityMethod) \
         if "priority_method" in obj else engagement.PriorityMethod.softpriority,
-      obj["mode_ranking"] if "mode_ranking" in obj else None,
-      obj["mode_adjustments"] if "mode_adjustments" in obj else None,
-      obj["goal_adjustments"] if "goal_adjustments" in obj else None,
-      obj["goal_overrides"] if "goal_overrides" in obj else None
+      mode_ranking=obj["mode_ranking"] if "mode_ranking" in obj else None,
+      mode_adjustments=obj["mode_adjustments"] \
+        if "mode_adjustments" in obj else None,
+      goal_adjustments=obj["goal_adjustments"] \
+        if "goal_adjustments" in obj else None,
+      goal_overrides = obj["goal_overrides"] \
+        if "goal_overrides" in obj else None
     )
 
   def set_decision_method(self, dm):
@@ -470,5 +477,5 @@ class PlayerModel:
       self.priority_method,
       self._synthesized_mode_of_engagement
     )
-    dec.select_option(choice)
+    dec.select_option(option)
     return self.decision_method.consistency(dec)

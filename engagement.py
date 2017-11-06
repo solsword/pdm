@@ -42,7 +42,7 @@ class PriorityMethod:
     return True
 
   def __hash__(self):
-    return hash(self.type) + 31839283 ^ hash(self.factor)
+    return hash(type(self)) + 31839283 ^ hash(self.factor)
 
   def _diff_(self, other):
     """
@@ -95,6 +95,7 @@ class PriorityMethod:
     """
     raise NotImplementedError("You must use a subclass of PriorityMethod.")
 
+
 @utils.super_class_property(0.75) # this is the default soft factor
 class SoftPriority(PriorityMethod):
   """
@@ -109,6 +110,8 @@ class SoftPriority(PriorityMethod):
     relevances according to the given goal priorities and this object's factor
     value.
     """
+    # TODO: normalize relevance according to highest-available priority?
+    # Interaction with DEFAULT_PRIORITY may be unfortunate...
     models = [ dm ]
     all_goals = set()
     for opt in dm:
@@ -349,7 +352,7 @@ class ModeOfEngagement:
     result = {}
     for o in option.outcomes:
       out = option.outcomes[o]
-      if out.visibility * out.apparent_likelihood > 0: # otherwise ignore
+      if out.salience * out.apparent_likelihood > 0: # otherwise ignore
         for g in out.goal_effects:
           if g in self.goals:
 
@@ -381,7 +384,7 @@ class ModeOfEngagement:
     Builds a decision model for the given choice based on the goals specified
     in this mode of engagement. A decision model maps from option names to maps
     from goal names to prospective impression lists, and is based on the
-    visibility, certainty, and apparent likelihood of outcomes plus the
+    salience, certainty, and apparent likelihood of outcomes plus the
     valences of their goal effects.
     """
     result = {}
@@ -389,3 +392,21 @@ class ModeOfEngagement:
       result[o] = self.build_prospective_option_model(choice, choice.options[o])
 
     return result
+
+  def get_factored_decision_model(self, choice, priority_method, dm=None):
+    """
+    Calls build_decision_model to build a decision model, and then factors that
+    decision model using the given priority method and this MoE's goal
+    priorities. Returns a pair of (models_list, goal_relevance) (see
+    PriorityMethod.factor_decision_model). If 'dm' is given, it is used
+    directly as the decision model to be factored rather than computing a new
+    one using build_decision_model, in which case only the goal priorities from
+    this mode of engagement are used.
+    """
+    if dm is None:
+      dm = self.build_decision_model(choice)
+
+    return priority_method.factor_decision_model(
+      dm,
+      self.priorities
+    )
