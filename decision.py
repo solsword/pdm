@@ -256,10 +256,12 @@ class Utilizing(DecisionMethod):
       utilities[opt] = 0
       for goal in decision_model[opt]:
         for pri in decision_model[opt][goal]:
-          utilities[opt] += pri.utility() * (
-            goal_relevance[goal]
-              if goal in goal_relevance
-              else 1
+          utilities[opt] = utilities[opt] + float(
+            pri.utility() * (
+              goal_relevance[goal]
+                if goal in goal_relevance
+                else 1
+            )
           )
 
     ulevels = reversed(sorted(list(utilities.values())))

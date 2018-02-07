@@ -50,10 +50,12 @@ from packable import pack, unpack
 
 def combine_per_choice(*args):
   """
-  Combines two or more per-choice analytics results into 
+  Combines two or more per-choice analytics results into one.
   """
   args = list(args)
   result = args.pop()
+  new_weight = None
+  new_averages = None
   while args:
     other = args.pop()
     for key in other:
@@ -62,7 +64,10 @@ def combine_per_choice(*args):
       else:
         old_weight, old_averages = result[key]
         other_weight, other_averages = other[key]
-        if set(old_averages.keys()) != set(new_averages.keys()):
+        if (
+          new_averages
+      and set(old_averages.keys()) != set(new_averages.keys())
+        ):
           raise ValueError(
             "Can't combine per-choice results which used different sets of "
             "player models."
@@ -160,6 +165,20 @@ def main(models_str, choices_str, trace_strings):
   traces = [json.loads(st) for st in trace_strings]
 
   results = [analyze_trace(models, choices, tr) for tr in traces]
+
+  all_decisions = {}
+  for ch in choices:
+    cn = ch.name
+    if cn not in all_decisions:
+      all_decisions[cn] = {}
+  for tr in traces:
+    for tch in tr:
+      add_to = all_decisions[tch[0]]
+      if tch[1] in add_to:
+        add_to[tch[1]] += 1
+      else:
+        add_to[tch[1]] = 1
+
   overall_per_choice = combine_per_choice(*[res[2] for res in results])
 
   # TODO: More formatting here
@@ -170,6 +189,9 @@ def main(models_str, choices_str, trace_strings):
   for cn in overall_per_choice:
     times, agreements = overall_per_choice[cn]
     print("Choice: '{}' (seen {} times)".format(cn, times))
+    print("Decisions:")
+    for dc in all_decisions[cn]:
+      print("  {}: {}".format(dc, all_decisions[cn][dc]))
     print("Model agreement:")
     for pmn in agreements:
       print("  {}: {:.3f}".format(pmn, agreements[pmn]))
