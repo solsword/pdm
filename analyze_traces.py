@@ -162,9 +162,11 @@ def main(models_str, choices_str, trace_strings):
         "Failed to unpack choice #{}".format(i)
       ) from e
 
-  traces = [json.loads(st) for st in trace_strings]
+  traces = { fn: json.loads(trace_strings[fn]) for fn in trace_strings }
 
-  results = [analyze_trace(models, choices, tr) for tr in traces]
+  results = {
+    tr: analyze_trace(models, choices, traces[tr]) for tr in traces
+  }
 
   all_decisions = {}
   for ch in choices:
@@ -172,18 +174,22 @@ def main(models_str, choices_str, trace_strings):
     if cn not in all_decisions:
       all_decisions[cn] = {}
   for tr in traces:
-    for tch in tr:
+    for tch in traces[tr]:
       add_to = all_decisions[tch[0]]
       if tch[1] in add_to:
         add_to[tch[1]] += 1
       else:
         add_to[tch[1]] = 1
 
-  overall_per_choice = combine_per_choice(*[res[2] for res in results])
+  overall_per_choice = combine_per_choice(*[res[2] for res in results.values()])
 
   # TODO: More formatting here
-  for res in results:
-    print("Averages:\n", res[0])
+  for tn in results:
+    res = results[tn]
+    print("Averages for {}:".format(tn))
+    for model in models:
+      pmn = model.name
+      print("  {:.3g} {}".format(res[0][pmn], pmn))
     print('-'*80)
 
   for cn in overall_per_choice:
@@ -194,7 +200,7 @@ def main(models_str, choices_str, trace_strings):
       print("  {}: {}".format(dc, all_decisions[cn][dc]))
     print("Model agreement:")
     for pmn in agreements:
-      print("  {}: {:.3f}".format(pmn, agreements[pmn]))
+      print("  {}: {:.3g}".format(pmn, agreements[pmn]))
     print('-'*80)
 
 
@@ -217,9 +223,9 @@ if __name__ == "__main__":
   with open(choices_file, 'r') as fin:
     choices_str = fin.read()
 
-  trace_strings = []
+  trace_strings = {}
   for f in trace_files:
     with open(f, 'r') as fin:
-      trace_strings.append(fin.read())
+      trace_strings[f] = fin.read()
 
   main(models_str, choices_str, trace_strings)
